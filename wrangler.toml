@@ -5,11 +5,11 @@ compatibility_date = "2026-04-08"
 [[d1_databases]]
 binding = "DB"
 database_name = "arove-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "11ed36bd-93ff-46ee-993f-84ada2f9ba07"
 
 [[kv_namespaces]]
 binding = "CACHE"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "e85d4f28e29c4c79b6882fdb162df091"
 
 [triggers]
 crons = ["*/1 * * * *"]
