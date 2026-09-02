@@ -1,0 +1,23 @@
+{
+  "name": "arove",
+  "version": "0.3.0",
+  "description": "Open-source, edge-optimized REST + WebSocket heartbeat for GitHub repositories. Runs on Cloudflare Workers.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "db:init": "wrangler d1 execute arove-db --file=./src/db/schema.sql",
+    "db:init:remote": "wrangler d1 execute arove-db --remote --file=./src/db/schema.sql",
+    "db:migrate:remote": "wrangler d1 execute arove-db --remote --file=./src/db/migrations/001_add_webhook_columns.sql"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "hono": "^4.6.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^3.90.0"
+  }
+}

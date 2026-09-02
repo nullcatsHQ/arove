@@ -1,0 +1,20 @@
+name = "arove"
+main = "src/index.ts"
+compatibility_date = "2026-04-08"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "arove-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[triggers]
+crons = ["*/1 * * * *"]
+
+[vars]
+POLL_INTERVAL_ACTIVE_MS = "60000"
+POLL_INTERVAL_IDLE_MS = "300000"
+SOCKET_CHECK_INTERVAL_MS = "8000"
