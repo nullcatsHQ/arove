@@ -1,5 +1,5 @@
 import { Hono, type Context, type Next } from "hono";
-import { fetchRepoSnapshot } from "../github/normalize.js";
+import { fetchRepoSnapshot, PrivateRepoError } from "../github/normalize.js";
 import {
   getCachedSnapshot,
   setCachedSnapshot,
@@ -111,23 +111,57 @@ function validateRepoParams() {
 repoRoutes.use("/:owner/:name", validateRepoParams());
 repoRoutes.use("/:owner/:name/*", validateRepoParams());
 
+async function verifyPublicRepoExists(
+  env: Env,
+  owner: string,
+  name: string
+): Promise<
+  | { ok: true }
+  | { ok: false; status: 400 | 404 | 502; error: string; message: string }
+> {
+  try {
+    const ghRepo = await getRepo(owner, name, env.GITHUB_TOKEN);
+    if (ghRepo.private) {
+      return {
+        ok: false,
+        status: 400,
+        error: "private_repo",
+        message: "Arove only supports public repositories.",
+      };
+    }
+    return { ok: true };
+  } catch (err: unknown) {
+    if (err instanceof GitHubApiError && err.status === 404) {
+      return {
+        ok: false,
+        status: 404,
+        error: "repo_not_found",
+        message: `${owner}/${name} does not exist on GitHub.`,
+      };
+    }
+    console.error(`[repo] GitHub existence check failed for ${owner}/${name}:`, err);
+    return {
+      ok: false,
+      status: 502,
+      error: "upstream_fetch_failed",
+      message: "Could not verify repo with GitHub.",
+    };
+  }
+}
+
 repoRoutes.get("/:owner/:name", async (c) => {
   const { owner, name } = c.req.param();
   const upgradeHeader = c.req.header("upgrade");
 
-  const repo = await findRepo(c.env.DB, owner, name);
-  if (!repo) {
-    return c.json(
-      errorResponse(
-        404,
-        "repo_not_registered",
-        `${owner}/${name} is not registered with Arove. POST /v1/repo/${owner}/${name}/register first.`
-      ),
-      404
-    );
-  }
+  const registered = await findRepo(c.env.DB, owner, name);
 
   if (upgradeHeader?.toLowerCase() === "websocket") {
+    if (!registered) {
+      const check = await verifyPublicRepoExists(c.env, owner, name);
+      if (!check.ok) {
+        return c.json(errorResponse(check.status, check.error, check.message), check.status);
+      }
+    }
     return handleWebSocketUpgrade(c.env, owner, name, c.req.raw);
   }
 
@@ -143,13 +177,10 @@ repoRoutes.get("/:owner/:name", async (c) => {
 
     c.header("ETag", tag);
     c.header("Cache-Control", "public, max-age=30");
+    c.header("X-Arove-Registered", registered ? "true" : "false");
     return c.json(body);
   } catch (err) {
-    console.error(`[repo] fetch failed for ${owner}/${name}:`, err);
-    return c.json(
-      errorResponse(502, "upstream_fetch_failed", "Could not fetch repo data from GitHub."),
-      502
-    );
+    return handleSnapshotFetchError(c, owner, name, err);
   }
 });
 
@@ -157,7 +188,16 @@ repoRoutes.get("/:owner/:name/commits", async (c) => {
   const { owner, name } = c.req.param();
   const repo = await findRepo(c.env.DB, owner, name);
   if (!repo) {
-    return c.json(errorResponse(404, "repo_not_registered", "Repo not registered."), 404);
+    return c.json(
+      errorResponse(
+        404,
+        "history_unavailable",
+        `${owner}/${name} isn't registered, so Arove has no stored commit history for it yet. ` +
+          `POST /v1/repo/${owner}/${name}/register to start tracking history, or use the live ` +
+          "GitHub API directly for a one-off commit list."
+      ),
+      404
+    );
   }
 
   const limit = parseBoundedLimit(c.req.query("limit"), DEFAULT_COMMITS_LIMIT);
@@ -170,7 +210,15 @@ repoRoutes.get("/:owner/:name/stats", async (c) => {
   const { owner, name } = c.req.param();
   const repo = await findRepo(c.env.DB, owner, name);
   if (!repo) {
-    return c.json(errorResponse(404, "repo_not_registered", "Repo not registered."), 404);
+    return c.json(
+      errorResponse(
+        404,
+        "history_unavailable",
+        `${owner}/${name} isn't registered, so Arove has no stored stats history for it yet. ` +
+          `POST /v1/repo/${owner}/${name}/register to start tracking history over time.`
+      ),
+      404
+    );
   }
 
   const limit = parseBoundedLimit(c.req.query("limit"), DEFAULT_STATS_LIMIT);
@@ -182,7 +230,15 @@ repoRoutes.get("/:owner/:name/events", async (c) => {
   const { owner, name } = c.req.param();
   const repo = await findRepo(c.env.DB, owner, name);
   if (!repo) {
-    return c.json(errorResponse(404, "repo_not_registered", "Repo not registered."), 404);
+    return c.json(
+      errorResponse(
+        404,
+        "history_unavailable",
+        `${owner}/${name} isn't registered, so Arove has no event history for it yet. ` +
+          `POST /v1/repo/${owner}/${name}/register to start tracking events.`
+      ),
+      404
+    );
   }
 
   const limit = parseBoundedLimit(c.req.query("limit"), DEFAULT_STATS_LIMIT);
@@ -190,22 +246,59 @@ repoRoutes.get("/:owner/:name/events", async (c) => {
   return c.json({ repo: `${owner}/${name}`, events });
 });
 
+function handleSnapshotFetchError(
+  c: Context<{ Bindings: Env }>,
+  owner: string,
+  name: string,
+  err: unknown
+): Response {
+  if (err instanceof PrivateRepoError) {
+    return c.json(
+      errorResponse(400, "private_repo", "Arove only supports public repositories."),
+      400
+    );
+  }
+  if (err instanceof GitHubApiError && err.status === 404) {
+    return c.json(
+      errorResponse(404, "repo_not_found", `${owner}/${name} does not exist on GitHub.`),
+      404
+    );
+  }
+  console.error(`[repo] snapshot fetch failed for ${owner}/${name}:`, err);
+  return c.json(
+    errorResponse(502, "upstream_fetch_failed", "Could not fetch repo data from GitHub."),
+    502
+  );
+}
+
 repoRoutes.get("/:owner/:name/languages", async (c) => {
   const { owner, name } = c.req.param();
-  const snapshot = await getSnapshotOrFetch(c.env, owner, name);
-  return c.json({ repo: `${owner}/${name}`, languages: snapshot.languages });
+  try {
+    const snapshot = await getSnapshotOrFetch(c.env, owner, name);
+    return c.json({ repo: `${owner}/${name}`, languages: snapshot.languages });
+  } catch (err) {
+    return handleSnapshotFetchError(c, owner, name, err);
+  }
 });
 
 repoRoutes.get("/:owner/:name/contributors", async (c) => {
   const { owner, name } = c.req.param();
-  const snapshot = await getSnapshotOrFetch(c.env, owner, name);
-  return c.json({ repo: `${owner}/${name}`, contributors: snapshot.topContributors });
+  try {
+    const snapshot = await getSnapshotOrFetch(c.env, owner, name);
+    return c.json({ repo: `${owner}/${name}`, contributors: snapshot.topContributors });
+  } catch (err) {
+    return handleSnapshotFetchError(c, owner, name, err);
+  }
 });
 
 repoRoutes.get("/:owner/:name/releases", async (c) => {
   const { owner, name } = c.req.param();
-  const snapshot = await getSnapshotOrFetch(c.env, owner, name);
-  return c.json({ repo: `${owner}/${name}`, latestRelease: snapshot.latestRelease });
+  try {
+    const snapshot = await getSnapshotOrFetch(c.env, owner, name);
+    return c.json({ repo: `${owner}/${name}`, latestRelease: snapshot.latestRelease });
+  } catch (err) {
+    return handleSnapshotFetchError(c, owner, name, err);
+  }
 });
 
 repoRoutes.get("/:owner/:name/badge", async (c) => {
@@ -264,26 +357,9 @@ repoRoutes.get("/:owner/:name/badge", async (c) => {
 repoRoutes.post("/:owner/:name/register", async (c) => {
   const { owner, name } = c.req.param();
 
-  try {
-    const ghRepo = await getRepo(owner, name, c.env.GITHUB_TOKEN);
-    if (ghRepo.private) {
-      return c.json(
-        errorResponse(400, "private_repo", "Arove only supports public repositories for now."),
-        400
-      );
-    }
-  } catch (err: unknown) {
-    if (err instanceof GitHubApiError && err.status === 404) {
-      return c.json(
-        errorResponse(404, "repo_not_found", `${owner}/${name} does not exist on GitHub.`),
-        404
-      );
-    }
-    console.error(`[register] GitHub lookup failed for ${owner}/${name}:`, err);
-    return c.json(
-      errorResponse(502, "upstream_fetch_failed", "Could not verify repo with GitHub."),
-      502
-    );
+  const check = await verifyPublicRepoExists(c.env, owner, name);
+  if (!check.ok) {
+    return c.json(errorResponse(check.status, check.error, check.message), check.status);
   }
 
   const { repo, wasCreated } = await registerRepo(c.env.DB, owner, name);
@@ -397,6 +473,12 @@ repoRoutes.post("/:owner/:name/refresh", async (c) => {
     await pollOneRepo(c.env, owner, name, repo.id);
   } catch (err) {
     console.error(`[refresh] failed for ${fullName}:`, err);
+    if (err instanceof PrivateRepoError) {
+      return c.json(
+        errorResponse(400, "private_repo", `${fullName} appears to have been made private on GitHub.`),
+        400
+      );
+    }
     return c.json(
       errorResponse(502, "upstream_fetch_failed", "Could not refresh repo data from GitHub."),
       502
@@ -428,14 +510,16 @@ batchRoutes.get("/", async (c) => {
       if (!owner || !name || !isValidOwner(owner) || !isValidRepoName(name)) {
         return { repo: entry, error: "invalid_repo_format" };
       }
-      const repo = await findRepo(c.env.DB, owner, name);
-      if (!repo) {
-        return { repo: entry, error: "repo_not_registered" };
-      }
       try {
         const snapshot = await getSnapshotOrFetch(c.env, owner, name);
         return { repo: entry, snapshot };
-      } catch {
+      } catch (err) {
+        if (err instanceof PrivateRepoError) {
+          return { repo: entry, error: "private_repo" };
+        }
+        if (err instanceof GitHubApiError && err.status === 404) {
+          return { repo: entry, error: "repo_not_found" };
+        }
         return { repo: entry, error: "upstream_fetch_failed" };
       }
     })
@@ -510,10 +594,11 @@ function handleWebSocketUpgrade(
       safeSend({ type: "hello", repo: fullName, snapshot });
     } catch (err) {
       console.error(`[ws] initial snapshot fetch failed for ${fullName}:`, err);
-      safeSend({
-        type: "error",
-        message: "Could not fetch initial snapshot. Will keep retrying.",
-      });
+      const message =
+        err instanceof PrivateRepoError
+          ? `${fullName} appears to be private and can't be tracked.`
+          : "Could not fetch initial snapshot. Will keep retrying.";
+      safeSend({ type: "error", message });
     }
   };
 

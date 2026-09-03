@@ -51,14 +51,25 @@ function normalizeCommit(raw: GhCommit): CommitSummary {
   };
 }
 
+export class PrivateRepoError extends Error {
+  constructor(owner: string, name: string) {
+    super(`${owner}/${name} is private.`);
+  }
+}
+
 export async function fetchRepoSnapshot(
   owner: string,
   name: string,
   token: string
 ): Promise<RepoSnapshot> {
-  const [repoData, languagesRaw, commitsRaw, contributorsRaw, releasesRaw, readmeExists, openPrCount] =
+  const repoData = await getRepo(owner, name, token);
+
+  if (repoData.private) {
+    throw new PrivateRepoError(owner, name);
+  }
+
+  const [languagesRaw, commitsRaw, contributorsRaw, releasesRaw, readmeExists, openPrCount] =
     await Promise.all([
-      getRepo(owner, name, token),
       getLanguages(owner, name, token),
       getCommits(owner, name, token, 10),
       getContributors(owner, name, token, 10),
