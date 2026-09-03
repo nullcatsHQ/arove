@@ -85,6 +85,45 @@ export interface RepoSnapshotCompact {
   fetchedAt: string;
 }
 
+export interface BranchSummary {
+  name: string;
+  commitSha: string;
+  isProtected: boolean;
+  isDefault: boolean;
+}
+
+export interface TagSummary {
+  name: string;
+  commitSha: string;
+}
+
+export interface IssueSummary {
+  number: number;
+  title: string;
+  state: string;
+  authorLogin: string | null;
+  authorAvatarUrl: string | null;
+  labels: string[];
+  commentCount: number;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
+}
+
+export interface PullRequestSummary {
+  number: number;
+  title: string;
+  state: string;
+  isDraft: boolean;
+  authorLogin: string | null;
+  authorAvatarUrl: string | null;
+  baseBranch: string;
+  headBranch: string;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
+}
+
 export const AROVE_EVENT_TYPES = [
   "push",
   "star",
@@ -151,4 +190,6 @@ export interface Env {
   POLL_INTERVAL_ACTIVE_MS: string;
   POLL_INTERVAL_IDLE_MS: string;
   SOCKET_CHECK_INTERVAL_MS: string;
+  RATE_LIMIT_ANONYMOUS_PER_MINUTE: string;
+  RATE_LIMIT_AUTHENTICATED_PER_MINUTE: string;
 }

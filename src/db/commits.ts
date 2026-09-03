@@ -45,23 +45,32 @@ export async function getCommitHistory(
   db: D1Database,
   repoId: number,
   limit = 50,
-  since?: string
+  since?: string,
+  offset = 0
 ): Promise<CommitRow[]> {
   if (since) {
     const result = await db
       .prepare(
-        "SELECT * FROM commits WHERE repo_id = ? AND committed_at >= ? ORDER BY committed_at DESC LIMIT ?"
+        "SELECT * FROM commits WHERE repo_id = ? AND committed_at >= ? ORDER BY committed_at DESC LIMIT ? OFFSET ?"
       )
-      .bind(repoId, since, limit)
+      .bind(repoId, since, limit, offset)
       .all<CommitRow>();
     return result.results ?? [];
   }
 
   const result = await db
-    .prepare("SELECT * FROM commits WHERE repo_id = ? ORDER BY committed_at DESC LIMIT ?")
-    .bind(repoId, limit)
+    .prepare("SELECT * FROM commits WHERE repo_id = ? ORDER BY committed_at DESC LIMIT ? OFFSET ?")
+    .bind(repoId, limit, offset)
     .all<CommitRow>();
   return result.results ?? [];
+}
+
+export async function countCommits(db: D1Database, repoId: number): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) as count FROM commits WHERE repo_id = ?")
+    .bind(repoId)
+    .first<{ count: number }>();
+  return row?.count ?? 0;
 }
 
 export async function getLatestKnownSha(

@@ -1,15 +1,16 @@
 import { Hono, type Context, type Next } from "hono";
-import { fetchRepoSnapshot, PrivateRepoError } from "../github/normalize.js";
+import { fetchRepoSnapshot, fetchBranches, fetchTags, fetchIssues, fetchPullRequests, PrivateRepoError } from "../github/normalize.js";
 import {
   getCachedSnapshot,
   setCachedSnapshot,
   incrementSubscriberCount,
   decrementSubscriberCount,
+  getSnapshotVersion,
 } from "../cache/kv.js";
 import { findRepo, registerRepo, regenerateWebhookSecret } from "../db/repos.js";
-import { getCommitHistory } from "../db/commits.js";
-import { getSnapshotHistory } from "../db/snapshots.js";
-import { getRecentEvents } from "../db/events.js";
+import { getCommitHistory, countCommits } from "../db/commits.js";
+import { getSnapshotHistory, countSnapshots } from "../db/snapshots.js";
+import { getRecentEvents, getEventsSince, getLatestEventId, countEvents } from "../db/events.js";
 import { getRepo, GitHubApiError } from "../github/client.js";
 import { pollOneRepo } from "../jobs/poll-stats.js";
 import { AROVE_EVENT_TYPES } from "../types/arove.js";
@@ -50,6 +51,31 @@ function parseBoundedLimit(raw: string | undefined, fallback: number): number {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return Math.min(Math.floor(parsed), MAX_LIMIT);
+}
+
+function parsePage(raw: string | undefined): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return Math.floor(parsed);
+}
+
+interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+}
+
+function buildPaginationMeta(page: number, limit: number, total: number): PaginationMeta {
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  return {
+    page,
+    limit,
+    total,
+    totalPages,
+    hasNextPage: page < totalPages,
+  };
 }
 
 function escapeXml(input: string): string {
@@ -162,7 +188,7 @@ repoRoutes.get("/:owner/:name", async (c) => {
         return c.json(errorResponse(check.status, check.error, check.message), check.status);
       }
     }
-    return handleWebSocketUpgrade(c.env, owner, name, c.req.raw);
+    return handleWebSocketUpgrade(c.env, owner, name, registered?.id ?? null, c.req.raw);
   }
 
   try {
@@ -201,9 +227,20 @@ repoRoutes.get("/:owner/:name/commits", async (c) => {
   }
 
   const limit = parseBoundedLimit(c.req.query("limit"), DEFAULT_COMMITS_LIMIT);
+  const page = parsePage(c.req.query("page"));
   const since = c.req.query("since");
-  const commits = await getCommitHistory(c.env.DB, repo.id, limit, since);
-  return c.json({ repo: `${owner}/${name}`, commits });
+  const offset = (page - 1) * limit;
+
+  const [commits, total] = await Promise.all([
+    getCommitHistory(c.env.DB, repo.id, limit, since, offset),
+    countCommits(c.env.DB, repo.id),
+  ]);
+
+  return c.json({
+    repo: `${owner}/${name}`,
+    commits,
+    pagination: buildPaginationMeta(page, limit, total),
+  });
 });
 
 repoRoutes.get("/:owner/:name/stats", async (c) => {
@@ -222,8 +259,19 @@ repoRoutes.get("/:owner/:name/stats", async (c) => {
   }
 
   const limit = parseBoundedLimit(c.req.query("limit"), DEFAULT_STATS_LIMIT);
-  const history = await getSnapshotHistory(c.env.DB, repo.id, limit);
-  return c.json({ repo: `${owner}/${name}`, history });
+  const page = parsePage(c.req.query("page"));
+  const offset = (page - 1) * limit;
+
+  const [history, total] = await Promise.all([
+    getSnapshotHistory(c.env.DB, repo.id, limit, offset),
+    countSnapshots(c.env.DB, repo.id),
+  ]);
+
+  return c.json({
+    repo: `${owner}/${name}`,
+    history,
+    pagination: buildPaginationMeta(page, limit, total),
+  });
 });
 
 repoRoutes.get("/:owner/:name/events", async (c) => {
@@ -242,8 +290,23 @@ repoRoutes.get("/:owner/:name/events", async (c) => {
   }
 
   const limit = parseBoundedLimit(c.req.query("limit"), DEFAULT_STATS_LIMIT);
-  const events = await getRecentEvents(c.env.DB, repo.id, limit);
-  return c.json({ repo: `${owner}/${name}`, events });
+  const page = parsePage(c.req.query("page"));
+  const offset = (page - 1) * limit;
+  const typeParam = c.req.query("type");
+  const eventTypes = typeParam
+    ? (typeParam.split(",").filter((t) => (AROVE_EVENT_TYPES as readonly string[]).includes(t)) as AroveEventType[])
+    : undefined;
+
+  const [events, total] = await Promise.all([
+    getRecentEvents(c.env.DB, repo.id, limit, offset, eventTypes),
+    countEvents(c.env.DB, repo.id, eventTypes),
+  ]);
+
+  return c.json({
+    repo: `${owner}/${name}`,
+    events,
+    pagination: buildPaginationMeta(page, limit, total),
+  });
 });
 
 function handleSnapshotFetchError(
@@ -270,6 +333,79 @@ function handleSnapshotFetchError(
     502
   );
 }
+
+async function getCachedListOrFetch<T>(
+  env: Env,
+  cacheKey: string,
+  fetcher: () => Promise<T>,
+  ttlSeconds = 45
+): Promise<T> {
+  const cached = await getCachedSnapshot<T>(env.CACHE, cacheKey);
+  if (cached) return cached;
+  const fresh = await fetcher();
+  await setCachedSnapshot(env.CACHE, cacheKey, fresh, ttlSeconds);
+  return fresh;
+}
+
+repoRoutes.get("/:owner/:name/branches", async (c) => {
+  const { owner, name } = c.req.param();
+  try {
+    const branches = await getCachedListOrFetch(
+      c.env,
+      `branches:${owner}/${name}`,
+      () => fetchBranches(owner, name, c.env.GITHUB_TOKEN)
+    );
+    return c.json({ repo: `${owner}/${name}`, branches });
+  } catch (err) {
+    return handleSnapshotFetchError(c, owner, name, err);
+  }
+});
+
+repoRoutes.get("/:owner/:name/tags", async (c) => {
+  const { owner, name } = c.req.param();
+  try {
+    const tags = await getCachedListOrFetch(
+      c.env,
+      `tags:${owner}/${name}`,
+      () => fetchTags(owner, name, c.env.GITHUB_TOKEN)
+    );
+    return c.json({ repo: `${owner}/${name}`, tags });
+  } catch (err) {
+    return handleSnapshotFetchError(c, owner, name, err);
+  }
+});
+
+repoRoutes.get("/:owner/:name/issues", async (c) => {
+  const { owner, name } = c.req.param();
+  const state = c.req.query("state");
+  const validState = state === "open" || state === "closed" || state === "all" ? state : "open";
+  try {
+    const issues = await getCachedListOrFetch(
+      c.env,
+      `issues:${validState}:${owner}/${name}`,
+      () => fetchIssues(owner, name, c.env.GITHUB_TOKEN, validState)
+    );
+    return c.json({ repo: `${owner}/${name}`, state: validState, issues });
+  } catch (err) {
+    return handleSnapshotFetchError(c, owner, name, err);
+  }
+});
+
+repoRoutes.get("/:owner/:name/pulls", async (c) => {
+  const { owner, name } = c.req.param();
+  const state = c.req.query("state");
+  const validState = state === "open" || state === "closed" || state === "all" ? state : "open";
+  try {
+    const pulls = await getCachedListOrFetch(
+      c.env,
+      `pulls:${validState}:${owner}/${name}`,
+      () => fetchPullRequests(owner, name, c.env.GITHUB_TOKEN, validState)
+    );
+    return c.json({ repo: `${owner}/${name}`, state: validState, pulls });
+  } catch (err) {
+    return handleSnapshotFetchError(c, owner, name, err);
+  }
+});
 
 repoRoutes.get("/:owner/:name/languages", async (c) => {
   const { owner, name } = c.req.param();
@@ -547,17 +683,21 @@ function handleWebSocketUpgrade(
   env: Env,
   owner: string,
   name: string,
+  repoId: number | null,
   request: Request
 ): Response {
   const pair = new WebSocketPair();
   const [client, server] = Object.values(pair);
   const fullName = `${owner}/${name}`;
   const eventFilter = parseEventFilter(request);
+  const isTracked = repoId !== null;
 
   server.accept();
 
   let closed = false;
   let lastSentSnapshotJson: string | null = null;
+  let lastSeenVersion = 0;
+  let lastSeenEventId = 0;
   let consecutiveFailures = 0;
   let interval: ReturnType<typeof setInterval>;
   const checkIntervalMs = Number(env.SOCKET_CHECK_INTERVAL_MS) || 25_000;
@@ -582,16 +722,28 @@ function handleWebSocketUpgrade(
     }
   };
 
-  const sendEvent = (event: AroveEventType, data: Record<string, unknown>) => {
-    if (eventFilter && !eventFilter.has(event)) return;
-    safeSend({ type: "event", event, data, ts: new Date().toISOString() });
+  const sendEvent = (eventRow: { event_type: AroveEventType; payload: string; detected_at: string }) => {
+    if (eventFilter && !eventFilter.has(eventRow.event_type)) return;
+    let data: Record<string, unknown> = {};
+    try {
+      data = JSON.parse(eventRow.payload);
+    } catch {
+    }
+    safeSend({ type: "event", event: eventRow.event_type, data, ts: eventRow.detected_at });
   };
+
+  let ready = false;
 
   const sendHello = async () => {
     try {
       const snapshot = await getSnapshotOrFetch(env, owner, name);
       lastSentSnapshotJson = JSON.stringify(snapshot);
-      safeSend({ type: "hello", repo: fullName, snapshot });
+      safeSend({ type: "hello", repo: fullName, tracked: isTracked, snapshot });
+
+      if (isTracked && repoId !== null) {
+        lastSeenVersion = await getSnapshotVersion(env.CACHE, fullName);
+        lastSeenEventId = await getLatestEventId(env.DB, repoId);
+      }
     } catch (err) {
       console.error(`[ws] initial snapshot fetch failed for ${fullName}:`, err);
       const message =
@@ -599,12 +751,41 @@ function handleWebSocketUpgrade(
           ? `${fullName} appears to be private and can't be tracked.`
           : "Could not fetch initial snapshot. Will keep retrying.";
       safeSend({ type: "error", message });
+    } finally {
+      ready = true;
     }
   };
 
-  const checkForUpdates = async () => {
-    if (closed) return;
+  const checkTrackedRepo = async () => {
+    if (repoId === null || !ready) return;
+    try {
+      const currentVersion = await getSnapshotVersion(env.CACHE, fullName);
+      consecutiveFailures = 0;
 
+      if (currentVersion !== lastSeenVersion) {
+        const newEvents = await getEventsSince(env.DB, repoId, lastSeenEventId, 20);
+        for (const row of newEvents) {
+          sendEvent(row);
+          lastSeenEventId = row.id;
+        }
+        lastSeenVersion = currentVersion;
+      }
+    } catch (err) {
+      consecutiveFailures += 1;
+      console.error(
+        `[ws] version check failed for ${fullName} (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`,
+        err
+      );
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        safeSend({
+          type: "error",
+          message: `Failed to check for updates ${consecutiveFailures} times in a row.`,
+        });
+      }
+    }
+  };
+
+  const checkUntrackedRepo = async () => {
     try {
       const snapshot = await getSnapshotOrFetch(env, owner, name);
       consecutiveFailures = 0;
@@ -612,36 +793,43 @@ function handleWebSocketUpgrade(
 
       if (lastSentSnapshotJson && currentJson !== lastSentSnapshotJson) {
         const prev = JSON.parse(lastSentSnapshotJson) as RepoSnapshot;
+        const ts = new Date().toISOString();
 
         if (snapshot.stats.stars !== prev.stats.stars) {
-          sendEvent("star", { from: prev.stats.stars, to: snapshot.stats.stars });
+          sendEvent({ event_type: "star", payload: JSON.stringify({ from: prev.stats.stars, to: snapshot.stats.stars }), detected_at: ts });
         }
         if (snapshot.stats.forks !== prev.stats.forks) {
-          sendEvent("fork", { from: prev.stats.forks, to: snapshot.stats.forks });
+          sendEvent({ event_type: "fork", payload: JSON.stringify({ from: prev.stats.forks, to: snapshot.stats.forks }), detected_at: ts });
         }
         if (snapshot.stats.openIssues !== prev.stats.openIssues) {
-          sendEvent("issue", { from: prev.stats.openIssues, to: snapshot.stats.openIssues });
+          sendEvent({ event_type: "issue", payload: JSON.stringify({ from: prev.stats.openIssues, to: snapshot.stats.openIssues }), detected_at: ts });
         }
 
         const prevReleaseTag = prev.latestRelease?.tagName;
         const currentReleaseTag = snapshot.latestRelease?.tagName;
         if (currentReleaseTag && currentReleaseTag !== prevReleaseTag) {
-          sendEvent("release", {
-            tag: currentReleaseTag,
-            name: snapshot.latestRelease?.name,
-            url: snapshot.latestRelease?.url,
+          sendEvent({
+            event_type: "release",
+            payload: JSON.stringify({
+              tag: currentReleaseTag,
+              name: snapshot.latestRelease?.name,
+              url: snapshot.latestRelease?.url,
+            }),
+            detected_at: ts,
           });
         }
 
         const prevSha = prev.latestCommits[0]?.sha;
         const currentSha = snapshot.latestCommits[0]?.sha;
         if (currentSha && currentSha !== prevSha) {
-          sendEvent("push", {
-            sha: currentSha,
-            message: snapshot.latestCommits[0]?.message,
-            author:
-              snapshot.latestCommits[0]?.authorLogin ??
-              snapshot.latestCommits[0]?.authorName,
+          sendEvent({
+            event_type: "push",
+            payload: JSON.stringify({
+              sha: currentSha,
+              message: snapshot.latestCommits[0]?.message,
+              author: snapshot.latestCommits[0]?.authorLogin ?? snapshot.latestCommits[0]?.authorName,
+            }),
+            detected_at: ts,
           });
         }
       }
@@ -653,7 +841,6 @@ function handleWebSocketUpgrade(
         `[ws] update check failed for ${fullName} (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`,
         err
       );
-
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
         safeSend({
           type: "error",
@@ -661,8 +848,21 @@ function handleWebSocketUpgrade(
         });
       }
     }
+  };
 
-    safeSend({ type: "ping", ts: new Date().toISOString() });
+  const checkForUpdates = () => (isTracked ? checkTrackedRepo() : checkUntrackedRepo());
+
+  const KEEPALIVE_TICKS = 4;
+  let ticksSinceKeepalive = 0;
+
+  const tick = async () => {
+    if (closed) return;
+    await checkForUpdates();
+    ticksSinceKeepalive += 1;
+    if (ticksSinceKeepalive >= KEEPALIVE_TICKS) {
+      ticksSinceKeepalive = 0;
+      safeSend({ type: "ping", ts: new Date().toISOString() });
+    }
   };
 
   server.addEventListener("message", (event: MessageEvent) => {
@@ -674,12 +874,10 @@ function handleWebSocketUpgrade(
       return;
     }
 
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      "type" in parsed &&
-      (parsed as { type: unknown }).type === "refresh"
-    ) {
+    if (!parsed || typeof parsed !== "object" || !("type" in parsed)) return;
+    const messageType = (parsed as { type: unknown }).type;
+
+    if (messageType === "refresh") {
       void checkForUpdates();
     }
   });
@@ -687,7 +885,7 @@ function handleWebSocketUpgrade(
   void incrementSubscriberCount(env.CACHE, fullName);
   void sendHello();
 
-  interval = setInterval(() => void checkForUpdates(), checkIntervalMs);
+  interval = setInterval(() => void tick(), checkIntervalMs);
 
   server.addEventListener("close", cleanup);
   server.addEventListener("error", cleanup);

@@ -147,6 +147,91 @@ export async function getOpenPullRequestCount(
   }
 }
 
+export interface GhBranch {
+  name: string;
+  commit: { sha: string };
+  protected: boolean;
+}
+
+export interface GhTag {
+  name: string;
+  commit: { sha: string };
+}
+
+export interface GhIssue {
+  number: number;
+  title: string;
+  state: string;
+  user: { login: string; avatar_url: string } | null;
+  labels: Array<{ name: string; color: string } | string>;
+  comments: number;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+  pull_request?: unknown;
+}
+
+export interface GhPullRequest {
+  number: number;
+  title: string;
+  state: string;
+  user: { login: string; avatar_url: string } | null;
+  draft: boolean;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+  base: { ref: string };
+  head: { ref: string };
+}
+
+export async function getBranches(
+  owner: string,
+  name: string,
+  token: string,
+  perPage = 30
+): Promise<GhBranch[]> {
+  return githubFetch<GhBranch[]>(
+    `/repos/${owner}/${name}/branches?per_page=${perPage}`,
+    token
+  );
+}
+
+export async function getTags(
+  owner: string,
+  name: string,
+  token: string,
+  perPage = 30
+): Promise<GhTag[]> {
+  return githubFetch<GhTag[]>(`/repos/${owner}/${name}/tags?per_page=${perPage}`, token);
+}
+
+export async function getIssues(
+  owner: string,
+  name: string,
+  token: string,
+  perPage = 30,
+  state: "open" | "closed" | "all" = "open"
+): Promise<GhIssue[]> {
+  const all = await githubFetch<GhIssue[]>(
+    `/repos/${owner}/${name}/issues?per_page=${perPage}&state=${state}`,
+    token
+  );
+  return all.filter((issue) => !issue.pull_request);
+}
+
+export async function getPullRequests(
+  owner: string,
+  name: string,
+  token: string,
+  perPage = 30,
+  state: "open" | "closed" | "all" = "open"
+): Promise<GhPullRequest[]> {
+  return githubFetch<GhPullRequest[]>(
+    `/repos/${owner}/${name}/pulls?per_page=${perPage}&state=${state}`,
+    token
+  );
+}
+
 export async function getRateLimit(token: string): Promise<{
   limit: number;
   remaining: number;

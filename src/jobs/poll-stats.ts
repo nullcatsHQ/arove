@@ -1,5 +1,5 @@
 import { fetchRepoSnapshot } from "../github/normalize.js";
-import { setCachedSnapshot, getSubscriberCount } from "../cache/kv.js";
+import { setCachedSnapshot, getSubscriberCount, bumpSnapshotVersion } from "../cache/kv.js";
 import { listAllRegisteredRepos, markSynced } from "../db/repos.js";
 import { getLatestSnapshot, insertSnapshot, type SnapshotRow } from "../db/snapshots.js";
 import { getLatestKnownSha, upsertCommits } from "../db/commits.js";
@@ -96,6 +96,10 @@ export async function pollOneRepo(
 
   for (const event of events) {
     await insertEvent(env.DB, repoId, event.type, event.data);
+  }
+
+  if (events.length > 0) {
+    await bumpSnapshotVersion(env.CACHE, fullName);
   }
 }
 

@@ -6,16 +6,28 @@ import {
   getReleases,
   hasReadme,
   getOpenPullRequestCount,
+  getBranches,
+  getTags,
+  getIssues,
+  getPullRequests,
   type GhCommit,
+  type GhBranch,
+  type GhTag,
+  type GhIssue,
+  type GhPullRequest,
 } from "./client.js";
 import type {
+  BranchSummary,
   CommitSummary,
   ContributorSummary,
   HealthSignals,
+  IssueSummary,
   LanguageBreakdown,
+  PullRequestSummary,
   ReleaseSummary,
   RepoSnapshot,
   RepoStats,
+  TagSummary,
 } from "../types/arove.js";
 
 const daysSince = (iso: string | null): number | null => {
@@ -135,4 +147,98 @@ export async function fetchRepoSnapshot(
     health,
     fetchedAt: new Date().toISOString(),
   };
+}
+
+function normalizeBranch(raw: GhBranch, defaultBranch: string): BranchSummary {
+  return {
+    name: raw.name,
+    commitSha: raw.commit.sha,
+    isProtected: raw.protected,
+    isDefault: raw.name === defaultBranch,
+  };
+}
+
+function normalizeTag(raw: GhTag): TagSummary {
+  return { name: raw.name, commitSha: raw.commit.sha };
+}
+
+function normalizeIssue(raw: GhIssue): IssueSummary {
+  return {
+    number: raw.number,
+    title: raw.title,
+    state: raw.state,
+    authorLogin: raw.user?.login ?? null,
+    authorAvatarUrl: raw.user?.avatar_url ?? null,
+    labels: raw.labels.map((l) => (typeof l === "string" ? l : l.name)),
+    commentCount: raw.comments,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    url: raw.html_url,
+  };
+}
+
+function normalizePullRequest(raw: GhPullRequest): PullRequestSummary {
+  return {
+    number: raw.number,
+    title: raw.title,
+    state: raw.state,
+    isDraft: raw.draft,
+    authorLogin: raw.user?.login ?? null,
+    authorAvatarUrl: raw.user?.avatar_url ?? null,
+    baseBranch: raw.base.ref,
+    headBranch: raw.head.ref,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    url: raw.html_url,
+  };
+}
+
+export async function fetchBranches(
+  owner: string,
+  name: string,
+  token: string
+): Promise<BranchSummary[]> {
+  const repoData = await getRepo(owner, name, token);
+  if (repoData.private) throw new PrivateRepoError(owner, name);
+
+  const branches = await getBranches(owner, name, token, 100);
+  return branches.map((b) => normalizeBranch(b, repoData.default_branch));
+}
+
+export async function fetchTags(
+  owner: string,
+  name: string,
+  token: string
+): Promise<TagSummary[]> {
+  const repoData = await getRepo(owner, name, token);
+  if (repoData.private) throw new PrivateRepoError(owner, name);
+
+  const tags = await getTags(owner, name, token, 100);
+  return tags.map(normalizeTag);
+}
+
+export async function fetchIssues(
+  owner: string,
+  name: string,
+  token: string,
+  state: "open" | "closed" | "all" = "open"
+): Promise<IssueSummary[]> {
+  const repoData = await getRepo(owner, name, token);
+  if (repoData.private) throw new PrivateRepoError(owner, name);
+
+  const issues = await getIssues(owner, name, token, 30, state);
+  return issues.map(normalizeIssue);
+}
+
+export async function fetchPullRequests(
+  owner: string,
+  name: string,
+  token: string,
+  state: "open" | "closed" | "all" = "open"
+): Promise<PullRequestSummary[]> {
+  const repoData = await getRepo(owner, name, token);
+  if (repoData.private) throw new PrivateRepoError(owner, name);
+
+  const pulls = await getPullRequests(owner, name, token, 30, state);
+  return pulls.map(normalizePullRequest);
 }

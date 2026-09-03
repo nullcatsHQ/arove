@@ -66,13 +66,22 @@ export async function getLatestSnapshot(
 export async function getSnapshotHistory(
   db: D1Database,
   repoId: number,
-  limit = 100
+  limit = 100,
+  offset = 0
 ): Promise<SnapshotRow[]> {
   const result = await db
     .prepare(
-      "SELECT * FROM repo_snapshots WHERE repo_id = ? ORDER BY captured_at DESC LIMIT ?"
+      "SELECT * FROM repo_snapshots WHERE repo_id = ? ORDER BY captured_at DESC LIMIT ? OFFSET ?"
     )
-    .bind(repoId, limit)
+    .bind(repoId, limit, offset)
     .all<SnapshotRow>();
   return result.results ?? [];
+}
+
+export async function countSnapshots(db: D1Database, repoId: number): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) as count FROM repo_snapshots WHERE repo_id = ?")
+    .bind(repoId)
+    .first<{ count: number }>();
+  return row?.count ?? 0;
 }
