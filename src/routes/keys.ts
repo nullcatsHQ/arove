@@ -13,8 +13,7 @@ keyRoutes.post("/", async (c) => {
   try {
     const body = await c.req.json<{ label?: string }>();
     label = typeof body.label === "string" ? body.label.slice(0, 100) : null;
-  } catch {
-  }
+  } catch {}
 
   const created = await createApiKey(c.env.DB, label);
 

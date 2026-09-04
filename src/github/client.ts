@@ -1,3 +1,6 @@
+import { pickToken, markTokenExhausted } from "./token-pool.js";
+import type { Env } from "../types/arove.js";
+
 const GITHUB_API = "https://api.github.com";
 
 function headers(token: string): HeadersInit {
@@ -5,7 +8,7 @@ function headers(token: string): HeadersInit {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "arove/0.2.0 (+https://github.com/nullcats/arove)",
+    "User-Agent": "arove/0.3.0 (+https://github.com/nullcats/arove)",
   };
 }
 
@@ -17,15 +20,43 @@ export class GitHubApiError extends Error {
   }
 }
 
-async function githubFetch<T>(path: string, token: string): Promise<T> {
-  const res = await fetch(`${GITHUB_API}${path}`, { headers: headers(token) });
-  if (!res.ok) {
-    throw new GitHubApiError(res.status, `GitHub API ${res.status} for ${path}`);
+function isRateLimitResponse(res: Response): boolean {
+  if (res.status === 429) return true;
+  if (res.status === 403) {
+    const remaining = res.headers.get("x-ratelimit-remaining");
+    return remaining === "0";
   }
-  if (res.status === 204) {
-    return [] as unknown as T;
+  return false;
+}
+
+async function githubFetch<T>(env: Env, path: string): Promise<T> {
+  const maxAttempts = 3;
+  let lastError: GitHubApiError | null = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { token, index } = await pickToken(env);
+    const res = await fetch(`${GITHUB_API}${path}`, { headers: headers(token) });
+
+    if (isRateLimitResponse(res)) {
+      const resetHeader = res.headers.get("x-ratelimit-reset");
+      const resetAt = resetHeader ? Number(resetHeader) : Math.floor(Date.now() / 1000) + 60;
+      await markTokenExhausted(env, index, resetAt);
+      lastError = new GitHubApiError(res.status, `Rate limited on token ${index} for ${path}`);
+      continue;
+    }
+
+    if (!res.ok) {
+      throw new GitHubApiError(res.status, `GitHub API ${res.status} for ${path}`);
+    }
+
+    if (res.status === 204) {
+      return [] as unknown as T;
+    }
+
+    return res.json();
   }
-  return res.json();
+
+  throw lastError ?? new GitHubApiError(429, `All configured tokens are rate limited for ${path}`);
 }
 
 export interface GhRepo {
@@ -46,6 +77,11 @@ export interface GhRepo {
   license: { spdx_id: string } | null;
   created_at: string;
   pushed_at: string;
+  homepage: string | null;
+  description: string | null;
+  topics?: string[];
+  visibility?: string;
+  network_count?: number;
 }
 
 export interface GhCommit {
@@ -74,57 +110,51 @@ export interface GhRelease {
   html_url: string;
 }
 
-export async function getRepo(owner: string, name: string, token: string): Promise<GhRepo> {
-  return githubFetch<GhRepo>(`/repos/${owner}/${name}`, token);
+export async function getRepo(env: Env, owner: string, name: string): Promise<GhRepo> {
+  return githubFetch<GhRepo>(env, `/repos/${owner}/${name}`);
 }
 
 export async function getLanguages(
+  env: Env,
   owner: string,
-  name: string,
-  token: string
+  name: string
 ): Promise<Record<string, number>> {
-  return githubFetch<Record<string, number>>(`/repos/${owner}/${name}/languages`, token);
+  return githubFetch<Record<string, number>>(env, `/repos/${owner}/${name}/languages`);
 }
 
 export async function getCommits(
+  env: Env,
   owner: string,
   name: string,
-  token: string,
   perPage = 10
 ): Promise<GhCommit[]> {
-  return githubFetch<GhCommit[]>(
-    `/repos/${owner}/${name}/commits?per_page=${perPage}`,
-    token
-  );
+  return githubFetch<GhCommit[]>(env, `/repos/${owner}/${name}/commits?per_page=${perPage}`);
 }
 
 export async function getContributors(
+  env: Env,
   owner: string,
   name: string,
-  token: string,
   perPage = 10
 ): Promise<GhContributor[]> {
   return githubFetch<GhContributor[]>(
-    `/repos/${owner}/${name}/contributors?per_page=${perPage}`,
-    token
+    env,
+    `/repos/${owner}/${name}/contributors?per_page=${perPage}`
   );
 }
 
 export async function getReleases(
+  env: Env,
   owner: string,
   name: string,
-  token: string,
   perPage = 1
 ): Promise<GhRelease[]> {
-  return githubFetch<GhRelease[]>(
-    `/repos/${owner}/${name}/releases?per_page=${perPage}`,
-    token
-  );
+  return githubFetch<GhRelease[]>(env, `/repos/${owner}/${name}/releases?per_page=${perPage}`);
 }
 
-export async function hasReadme(owner: string, name: string, token: string): Promise<boolean> {
+export async function hasReadme(env: Env, owner: string, name: string): Promise<boolean> {
   try {
-    await githubFetch(`/repos/${owner}/${name}/readme`, token);
+    await githubFetch(env, `/repos/${owner}/${name}/readme`);
     return true;
   } catch {
     return false;
@@ -132,14 +162,14 @@ export async function hasReadme(owner: string, name: string, token: string): Pro
 }
 
 export async function getOpenPullRequestCount(
+  env: Env,
   owner: string,
-  name: string,
-  token: string
+  name: string
 ): Promise<number> {
   try {
     const res = await githubFetch<{ total_count: number }>(
-      `/search/issues?q=${encodeURIComponent(`repo:${owner}/${name} is:pr is:open`)}&per_page=1`,
-      token
+      env,
+      `/search/issues?q=${encodeURIComponent(`repo:${owner}/${name} is:pr is:open`)}&per_page=1`
     );
     return res.total_count;
   } catch {
@@ -185,62 +215,63 @@ export interface GhPullRequest {
 }
 
 export async function getBranches(
+  env: Env,
   owner: string,
   name: string,
-  token: string,
   perPage = 30
 ): Promise<GhBranch[]> {
-  return githubFetch<GhBranch[]>(
-    `/repos/${owner}/${name}/branches?per_page=${perPage}`,
-    token
-  );
+  return githubFetch<GhBranch[]>(env, `/repos/${owner}/${name}/branches?per_page=${perPage}`);
 }
 
 export async function getTags(
+  env: Env,
   owner: string,
   name: string,
-  token: string,
   perPage = 30
 ): Promise<GhTag[]> {
-  return githubFetch<GhTag[]>(`/repos/${owner}/${name}/tags?per_page=${perPage}`, token);
+  return githubFetch<GhTag[]>(env, `/repos/${owner}/${name}/tags?per_page=${perPage}`);
 }
 
 export async function getIssues(
+  env: Env,
   owner: string,
   name: string,
-  token: string,
   perPage = 30,
   state: "open" | "closed" | "all" = "open"
 ): Promise<GhIssue[]> {
   const all = await githubFetch<GhIssue[]>(
-    `/repos/${owner}/${name}/issues?per_page=${perPage}&state=${state}`,
-    token
+    env,
+    `/repos/${owner}/${name}/issues?per_page=${perPage}&state=${state}`
   );
   return all.filter((issue) => !issue.pull_request);
 }
 
 export async function getPullRequests(
+  env: Env,
   owner: string,
   name: string,
-  token: string,
   perPage = 30,
   state: "open" | "closed" | "all" = "open"
 ): Promise<GhPullRequest[]> {
   return githubFetch<GhPullRequest[]>(
-    `/repos/${owner}/${name}/pulls?per_page=${perPage}&state=${state}`,
-    token
+    env,
+    `/repos/${owner}/${name}/pulls?per_page=${perPage}&state=${state}`
   );
 }
 
-export async function getRateLimit(token: string): Promise<{
+export async function getRateLimitForToken(token: string): Promise<{
   limit: number;
   remaining: number;
   resetAt: string;
 }> {
-  const res = await githubFetch<{
+  const res = await fetch(`${GITHUB_API}/rate_limit`, { headers: headers(token) });
+  if (!res.ok) {
+    throw new GitHubApiError(res.status, "Failed to fetch rate limit status");
+  }
+  const data = (await res.json()) as {
     resources: { core: { limit: number; remaining: number; reset: number } };
-  }>("/rate_limit", token);
-  const core = res.resources.core;
+  };
+  const core = data.resources.core;
   return {
     limit: core.limit,
     remaining: core.remaining,

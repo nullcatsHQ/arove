@@ -81,7 +81,7 @@ webhookRoutes.post("/github", async (c) => {
   const aroveEventType = githubEvent ? GITHUB_EVENT_TO_AROVE[githubEvent] : undefined;
 
   try {
-    const snapshot = await fetchRepoSnapshot(owner, name, c.env.GITHUB_TOKEN);
+    const snapshot = await fetchRepoSnapshot(c.env, owner, name);
     const fullName = `${owner}/${name}`;
 
     if (aroveEventType) {

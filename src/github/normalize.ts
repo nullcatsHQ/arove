@@ -20,6 +20,7 @@ import type {
   BranchSummary,
   CommitSummary,
   ContributorSummary,
+  Env,
   HealthSignals,
   IssueSummary,
   LanguageBreakdown,
@@ -70,11 +71,11 @@ export class PrivateRepoError extends Error {
 }
 
 export async function fetchRepoSnapshot(
+  env: Env,
   owner: string,
-  name: string,
-  token: string
+  name: string
 ): Promise<RepoSnapshot> {
-  const repoData = await getRepo(owner, name, token);
+  const repoData = await getRepo(env, owner, name);
 
   if (repoData.private) {
     throw new PrivateRepoError(owner, name);
@@ -82,12 +83,12 @@ export async function fetchRepoSnapshot(
 
   const [languagesRaw, commitsRaw, contributorsRaw, releasesRaw, readmeExists, openPrCount] =
     await Promise.all([
-      getLanguages(owner, name, token),
-      getCommits(owner, name, token, 10),
-      getContributors(owner, name, token, 10),
-      getReleases(owner, name, token, 1),
-      hasReadme(owner, name, token),
-      getOpenPullRequestCount(owner, name, token),
+      getLanguages(env, owner, name),
+      getCommits(env, owner, name, 10),
+      getContributors(env, owner, name, 10),
+      getReleases(env, owner, name, 1),
+      hasReadme(env, owner, name),
+      getOpenPullRequestCount(env, owner, name),
     ]);
 
   const stats: RepoStats = {
@@ -103,6 +104,11 @@ export async function fetchRepoSnapshot(
     license: repoData.license?.spdx_id ?? null,
     createdAt: repoData.created_at ?? new Date(0).toISOString(),
     pushedAt: repoData.pushed_at ?? new Date(0).toISOString(),
+    description: repoData.description ?? null,
+    homepage: repoData.homepage ?? null,
+    topics: repoData.topics ?? [],
+    visibility: repoData.visibility ?? (repoData.private ? "private" : "public"),
+    networkCount: repoData.network_count ?? repoData.forks_count ?? 0,
   };
 
   const latestCommits = commitsRaw.map(normalizeCommit);
@@ -194,51 +200,47 @@ function normalizePullRequest(raw: GhPullRequest): PullRequestSummary {
 }
 
 export async function fetchBranches(
+  env: Env,
   owner: string,
-  name: string,
-  token: string
+  name: string
 ): Promise<BranchSummary[]> {
-  const repoData = await getRepo(owner, name, token);
+  const repoData = await getRepo(env, owner, name);
   if (repoData.private) throw new PrivateRepoError(owner, name);
 
-  const branches = await getBranches(owner, name, token, 100);
+  const branches = await getBranches(env, owner, name, 100);
   return branches.map((b) => normalizeBranch(b, repoData.default_branch));
 }
 
-export async function fetchTags(
-  owner: string,
-  name: string,
-  token: string
-): Promise<TagSummary[]> {
-  const repoData = await getRepo(owner, name, token);
+export async function fetchTags(env: Env, owner: string, name: string): Promise<TagSummary[]> {
+  const repoData = await getRepo(env, owner, name);
   if (repoData.private) throw new PrivateRepoError(owner, name);
 
-  const tags = await getTags(owner, name, token, 100);
+  const tags = await getTags(env, owner, name, 100);
   return tags.map(normalizeTag);
 }
 
 export async function fetchIssues(
+  env: Env,
   owner: string,
   name: string,
-  token: string,
   state: "open" | "closed" | "all" = "open"
 ): Promise<IssueSummary[]> {
-  const repoData = await getRepo(owner, name, token);
+  const repoData = await getRepo(env, owner, name);
   if (repoData.private) throw new PrivateRepoError(owner, name);
 
-  const issues = await getIssues(owner, name, token, 30, state);
+  const issues = await getIssues(env, owner, name, 30, state);
   return issues.map(normalizeIssue);
 }
 
 export async function fetchPullRequests(
+  env: Env,
   owner: string,
   name: string,
-  token: string,
   state: "open" | "closed" | "all" = "open"
 ): Promise<PullRequestSummary[]> {
-  const repoData = await getRepo(owner, name, token);
+  const repoData = await getRepo(env, owner, name);
   if (repoData.private) throw new PrivateRepoError(owner, name);
 
-  const pulls = await getPullRequests(owner, name, token, 30, state);
+  const pulls = await getPullRequests(env, owner, name, 30, state);
   return pulls.map(normalizePullRequest);
 }

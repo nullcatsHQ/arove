@@ -105,7 +105,7 @@ async function getSnapshotOrFetch(
   const cached = await getCachedSnapshot<RepoSnapshot>(env.CACHE, fullName);
   if (cached) return cached;
 
-  const fresh = await fetchRepoSnapshot(owner, name, env.GITHUB_TOKEN);
+  const fresh = await fetchRepoSnapshot(env, owner, name);
   await setCachedSnapshot(env.CACHE, fullName, fresh);
   return fresh;
 }
@@ -146,7 +146,7 @@ async function verifyPublicRepoExists(
   | { ok: false; status: 400 | 404 | 502; error: string; message: string }
 > {
   try {
-    const ghRepo = await getRepo(owner, name, env.GITHUB_TOKEN);
+    const ghRepo = await getRepo(env, owner, name);
     if (ghRepo.private) {
       return {
         ok: false,
@@ -353,7 +353,7 @@ repoRoutes.get("/:owner/:name/branches", async (c) => {
     const branches = await getCachedListOrFetch(
       c.env,
       `branches:${owner}/${name}`,
-      () => fetchBranches(owner, name, c.env.GITHUB_TOKEN)
+      () => fetchBranches(c.env, owner, name)
     );
     return c.json({ repo: `${owner}/${name}`, branches });
   } catch (err) {
@@ -367,7 +367,7 @@ repoRoutes.get("/:owner/:name/tags", async (c) => {
     const tags = await getCachedListOrFetch(
       c.env,
       `tags:${owner}/${name}`,
-      () => fetchTags(owner, name, c.env.GITHUB_TOKEN)
+      () => fetchTags(c.env, owner, name)
     );
     return c.json({ repo: `${owner}/${name}`, tags });
   } catch (err) {
@@ -383,7 +383,7 @@ repoRoutes.get("/:owner/:name/issues", async (c) => {
     const issues = await getCachedListOrFetch(
       c.env,
       `issues:${validState}:${owner}/${name}`,
-      () => fetchIssues(owner, name, c.env.GITHUB_TOKEN, validState)
+      () => fetchIssues(c.env, owner, name, validState)
     );
     return c.json({ repo: `${owner}/${name}`, state: validState, issues });
   } catch (err) {
@@ -399,7 +399,7 @@ repoRoutes.get("/:owner/:name/pulls", async (c) => {
     const pulls = await getCachedListOrFetch(
       c.env,
       `pulls:${validState}:${owner}/${name}`,
-      () => fetchPullRequests(owner, name, c.env.GITHUB_TOKEN, validState)
+      () => fetchPullRequests(c.env, owner, name, validState)
     );
     return c.json({ repo: `${owner}/${name}`, state: validState, pulls });
   } catch (err) {
@@ -501,7 +501,7 @@ repoRoutes.post("/:owner/:name/register", async (c) => {
   const { repo, wasCreated } = await registerRepo(c.env.DB, owner, name);
 
   try {
-    const snapshot = await fetchRepoSnapshot(owner, name, c.env.GITHUB_TOKEN);
+    const snapshot = await fetchRepoSnapshot(c.env, owner, name);
     await setCachedSnapshot(c.env.CACHE, `${owner}/${name}`, snapshot);
   } catch (err) {
     console.error(`[register] initial fetch failed for ${owner}/${name}:`, err);
@@ -727,8 +727,7 @@ function handleWebSocketUpgrade(
     let data: Record<string, unknown> = {};
     try {
       data = JSON.parse(eventRow.payload);
-    } catch {
-    }
+    } catch {}
     safeSend({ type: "event", event: eventRow.event_type, data, ts: eventRow.detected_at });
   };
 

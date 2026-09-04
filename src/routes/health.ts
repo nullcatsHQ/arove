@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getRateLimit } from "../github/client.js";
+import { getTokenPoolSize } from "../github/token-pool.js";
 import { countRegisteredRepos } from "../db/repos.js";
 import type { Env } from "../types/arove.js";
 
@@ -12,8 +12,8 @@ healthRoutes.get("/", async (c) => {
     github: "ok",
   };
 
-  let githubRateLimit = null;
   let registeredRepoCount: number | null = null;
+  let tokenPoolSize = 0;
 
   try {
     await c.env.CACHE.put("health:ping", "1", { expirationTtl: 60 });
@@ -28,7 +28,7 @@ healthRoutes.get("/", async (c) => {
   }
 
   try {
-    githubRateLimit = await getRateLimit(c.env.GITHUB_TOKEN);
+    tokenPoolSize = getTokenPoolSize(c.env);
   } catch {
     checks.github = "error";
   }
@@ -39,7 +39,7 @@ healthRoutes.get("/", async (c) => {
     {
       status: allOk ? "healthy" : "degraded",
       checks,
-      githubRateLimit,
+      tokenPoolConfigured: tokenPoolSize > 0,
       registeredRepoCount,
       timestamp: new Date().toISOString(),
     },

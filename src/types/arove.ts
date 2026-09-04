@@ -17,6 +17,11 @@ export interface RepoStats {
   license: string | null;
   createdAt: string;
   pushedAt: string;
+  description: string | null;
+  homepage: string | null;
+  topics: string[];
+  visibility: string;
+  networkCount: number;
 }
 
 export interface LanguageBreakdown {
@@ -187,9 +192,11 @@ export interface Env {
   DB: D1Database;
   CACHE: KVNamespace;
   GITHUB_TOKEN: string;
+  TOKEN_COUNT: string;
   POLL_INTERVAL_ACTIVE_MS: string;
   POLL_INTERVAL_IDLE_MS: string;
   SOCKET_CHECK_INTERVAL_MS: string;
   RATE_LIMIT_ANONYMOUS_PER_MINUTE: string;
   RATE_LIMIT_AUTHENTICATED_PER_MINUTE: string;
+  [key: `GITHUB_TOKEN_${number}`]: string | undefined;
 }

@@ -57,7 +57,7 @@ export async function pollOneRepo(
   const fullName = `${owner}/${name}`;
 
   const [snapshot, previous, newestKnownSha, previousReleaseTag] = await Promise.all([
-    fetchRepoSnapshot(owner, name, env.GITHUB_TOKEN),
+    fetchRepoSnapshot(env, owner, name),
     getLatestSnapshot(env.DB, repoId),
     getLatestKnownSha(env.DB, repoId),
     getLatestReleaseTag(env.DB, repoId),
