@@ -1,3 +1,4 @@
+import { getFlag, setFlag, getCounter, setCounter } from "../cache/kv.js";
 import type { Env } from "../types/arove.js";
 
 function getConfiguredTokens(env: Env): string[] {
@@ -28,12 +29,11 @@ export async function markTokenExhausted(
   resetAtEpochSeconds: number
 ): Promise<void> {
   const ttl = Math.max(5, resetAtEpochSeconds - Math.floor(Date.now() / 1000));
-  await env.CACHE.put(`${EXHAUSTED_PREFIX}${tokenIndex}`, "1", { expirationTtl: ttl });
+  await setFlag(env.CACHE, `${EXHAUSTED_PREFIX}${tokenIndex}`, ttl);
 }
 
 async function isTokenExhausted(env: Env, tokenIndex: number): Promise<boolean> {
-  const value = await env.CACHE.get(`${EXHAUSTED_PREFIX}${tokenIndex}`);
-  return value !== null;
+  return getFlag(env.CACHE, `${EXHAUSTED_PREFIX}${tokenIndex}`);
 }
 
 export async function pickToken(env: Env): Promise<{ token: string; index: number }> {
@@ -43,16 +43,13 @@ export async function pickToken(env: Env): Promise<{ token: string; index: numbe
     return { token: tokens[0], index: 0 };
   }
 
-  const rawStart = await env.CACHE.get(ROUND_ROBIN_KEY);
-  const start = rawStart ? Number(rawStart) || 0 : 0;
+  const start = await getCounter(env.CACHE, ROUND_ROBIN_KEY);
 
   for (let offset = 0; offset < tokens.length; offset++) {
     const index = (start + offset) % tokens.length;
     const exhausted = await isTokenExhausted(env, index);
     if (!exhausted) {
-      await env.CACHE.put(ROUND_ROBIN_KEY, String((index + 1) % tokens.length), {
-        expirationTtl: 3600,
-      });
+      await setCounter(env.CACHE, ROUND_ROBIN_KEY, (index + 1) % tokens.length, 3600);
       return { token: tokens[index], index };
     }
   }

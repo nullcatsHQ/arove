@@ -117,3 +117,59 @@ export async function checkRateLimit(
     resetAt,
   };
 }
+
+const COOLDOWN_PREFIX = "cooldown:";
+const DEDUPE_PREFIX = "dedupe:";
+
+export async function isOnCooldown(kv: KVNamespace, key: string): Promise<boolean> {
+  const value = await kv.get(`${COOLDOWN_PREFIX}${key}`);
+  return value !== null;
+}
+
+export async function startCooldown(
+  kv: KVNamespace,
+  key: string,
+  ttlSeconds: number
+): Promise<void> {
+  await kv.put(`${COOLDOWN_PREFIX}${key}`, "1", { expirationTtl: ttlSeconds });
+}
+
+export async function wasAlreadyProcessed(kv: KVNamespace, dedupeId: string): Promise<boolean> {
+  const value = await kv.get(`${DEDUPE_PREFIX}${dedupeId}`);
+  return value !== null;
+}
+
+export async function markProcessed(
+  kv: KVNamespace,
+  dedupeId: string,
+  ttlSeconds: number
+): Promise<void> {
+  await kv.put(`${DEDUPE_PREFIX}${dedupeId}`, "1", { expirationTtl: ttlSeconds });
+}
+
+export async function healthCheckPing(kv: KVNamespace): Promise<void> {
+  await kv.put("health:ping", "1", { expirationTtl: 60 });
+}
+
+export async function getFlag(kv: KVNamespace, key: string): Promise<boolean> {
+  const value = await kv.get(key);
+  return value !== null;
+}
+
+export async function setFlag(kv: KVNamespace, key: string, ttlSeconds: number): Promise<void> {
+  await kv.put(key, "1", { expirationTtl: ttlSeconds });
+}
+
+export async function getCounter(kv: KVNamespace, key: string): Promise<number> {
+  const raw = await kv.get(key);
+  return raw ? Number(raw) || 0 : 0;
+}
+
+export async function setCounter(
+  kv: KVNamespace,
+  key: string,
+  value: number,
+  ttlSeconds: number
+): Promise<void> {
+  await kv.put(key, String(value), { expirationTtl: ttlSeconds });
+}

@@ -6,6 +6,8 @@ import {
   incrementSubscriberCount,
   decrementSubscriberCount,
   getSnapshotVersion,
+  isOnCooldown,
+  startCooldown,
 } from "../cache/kv.js";
 import { findRepo, registerRepo, regenerateWebhookSecret } from "../db/repos.js";
 import { getCommitHistory, countCommits } from "../db/commits.js";
@@ -594,8 +596,8 @@ repoRoutes.post("/:owner/:name/refresh", async (c) => {
     return c.json(errorResponse(404, "repo_not_registered", "Repo not registered."), 404);
   }
 
-  const cooldownKey = `refresh-cooldown:${fullName}`;
-  const onCooldown = await c.env.CACHE.get(cooldownKey);
+  const cooldownKey = `refresh:${fullName}`;
+  const onCooldown = await isOnCooldown(c.env.CACHE, cooldownKey);
   if (onCooldown) {
     return c.json(
       errorResponse(429, "refresh_rate_limited", "Refresh already happened recently."),
@@ -603,7 +605,7 @@ repoRoutes.post("/:owner/:name/refresh", async (c) => {
     );
   }
 
-  await c.env.CACHE.put(cooldownKey, "1", { expirationTtl: REFRESH_COOLDOWN_SECONDS });
+  await startCooldown(c.env.CACHE, cooldownKey, REFRESH_COOLDOWN_SECONDS);
 
   try {
     await pollOneRepo(c.env, owner, name, repo.id);

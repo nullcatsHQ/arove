@@ -4,7 +4,7 @@ import { findRepo, markWebhookReceived } from "../db/repos.js";
 import { insertEvent } from "../db/events.js";
 import { insertSnapshot } from "../db/snapshots.js";
 import { upsertCommits } from "../db/commits.js";
-import { setCachedSnapshot } from "../cache/kv.js";
+import { setCachedSnapshot, wasAlreadyProcessed, markProcessed } from "../cache/kv.js";
 import { fetchRepoSnapshot } from "../github/normalize.js";
 import type { ApiError, Env, AroveEventType } from "../types/arove.js";
 
@@ -68,12 +68,11 @@ webhookRoutes.post("/github", async (c) => {
   }
 
   if (deliveryId) {
-    const dedupeKey = `webhook-delivery:${deliveryId}`;
-    const alreadySeen = await c.env.CACHE.get(dedupeKey);
+    const alreadySeen = await wasAlreadyProcessed(c.env.CACHE, deliveryId);
     if (alreadySeen) {
       return c.json({ received: true, duplicate: true, event: githubEvent ?? "unknown" });
     }
-    await c.env.CACHE.put(dedupeKey, "1", { expirationTtl: 600 });
+    await markProcessed(c.env.CACHE, deliveryId, 600);
   }
 
   await markWebhookReceived(c.env.DB, repo.id);

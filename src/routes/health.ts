@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { getTokenPoolSize } from "../github/token-pool.js";
 import { countRegisteredRepos } from "../db/repos.js";
+import { healthCheckPing } from "../cache/kv.js";
 import type { Env } from "../types/arove.js";
 
 export const healthRoutes = new Hono<{ Bindings: Env }>();
@@ -16,7 +17,7 @@ healthRoutes.get("/", async (c) => {
   let tokenPoolSize = 0;
 
   try {
-    await c.env.CACHE.put("health:ping", "1", { expirationTtl: 60 });
+    await healthCheckPing(c.env.CACHE);
   } catch {
     checks.kv = "error";
   }
