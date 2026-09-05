@@ -29,7 +29,8 @@
 
 <br>
 
-No sign up. No dashboard. No config file to fill out before your first request even works. And you don't need to run your own copy to use it either, there's already a live one sitting there, waiting.
+For whatever you build 
+– nullCats™
 
 <br>
 
