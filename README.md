@@ -224,8 +224,7 @@ src/
 
 We lethally use $0 building this project, runs on nothing but free tiers, and that includes the public instance you can already query above.
 This is a lesson to people who thinks that they can't build anything good if they don't invest any money. Just remember everything is possible if you have the potential.
-At last this is a fun & wonderful experience for me (trmin) building this awesome project. 
-— itztrmin 
+At last this is a fun & wonderful experience for me (trmin) building this awesome project **<3**
 
 <br>
 
@@ -242,7 +241,7 @@ MIT, see [`LICENSE`](./LICENSE) for the full text.
 ---
 
 <p align="center">
-  This entire project was built by a single developer (Trmin) at nullCats™ <3
+  This entire project was built by a single developer (Trmin) at nullCats™.
   Made with 🖤 for cats
 </p>
 
