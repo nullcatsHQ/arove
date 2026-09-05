@@ -220,11 +220,12 @@ src/
   types/                 shared types
 ```
 
-## Fun fact
+## Developer's Note 
 
 We lethally use $0 building this project, runs on nothing but free tiers, and that includes the public instance you can already query above.
 This is a lesson to people who thinks that they can't build anything good if they don't invest any money. Just remember everything is possible if you have the potential.
 At last this is a fun & wonderful experience for me (trmin) building this awesome project. 
+— itztrmin 
 
 <br>
 
@@ -241,7 +242,8 @@ MIT, see [`LICENSE`](./LICENSE) for the full text.
 ---
 
 <p align="center">
-  Made with 🖤 by the ItzTrmin <3
+  This entire project was built by a single developer (Trmin) at nullCats™ <3
+  Made with 🖤 for cats
 </p>
 
 <p align="center">
