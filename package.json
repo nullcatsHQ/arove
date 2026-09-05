@@ -9,11 +9,12 @@
     "typecheck": "tsc --noEmit",
     "db:init": "wrangler d1 execute arove-db --file=./src/db/schema.sql",
     "db:init:remote": "wrangler d1 execute arove-db --remote --file=./src/db/schema.sql",
-    "db:migrate:remote": "wrangler d1 execute arove-db --remote --file=./src/db/migrations/001_add_webhook_columns.sql"
+    "db:migrate:webhooks:remote": "wrangler d1 execute arove-db --remote --file=./src/db/migrations/001_add_webhook_columns.sql",
+    "db:migrate:keys:remote": "wrangler d1 execute arove-db --remote --file=./src/db/migrations/002_add_api_keys.sql"
   },
   "license": "MIT",
   "dependencies": {
-    "hono": "^4.6.9"
+    "hono": "^4.12.16"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0",

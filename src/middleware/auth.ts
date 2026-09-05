@@ -21,8 +21,8 @@ function errorResponse(status: number, error: string, message: string): ApiError
 
 export function rateLimitAndAuth() {
   return async (c: Context<{ Bindings: Env; Variables: { auth: AuthState } }>, next: Next) => {
-    const anonymousLimit = parseLimit(c.env.RATE_LIMIT_ANONYMOUS_PER_MINUTE, 60);
-    const authenticatedLimit = parseLimit(c.env.RATE_LIMIT_AUTHENTICATED_PER_MINUTE, 300);
+    const anonymousLimit = parseLimit(c.env.RATE_LIMIT_ANONYMOUS_PER_MINUTE, 120);
+    const authenticatedLimit = parseLimit(c.env.RATE_LIMIT_AUTHENTICATED_PER_MINUTE, 1000);
 
     const authHeader = c.req.header("authorization");
     const rawKey = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;

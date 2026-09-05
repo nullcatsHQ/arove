@@ -2,6 +2,7 @@ import {
   getRepo,
   getLanguages,
   getCommits,
+  getCommitWithStats,
   getContributors,
   getReleases,
   hasReadme,
@@ -49,13 +50,22 @@ function normalizeLanguages(raw: Record<string, number>): LanguageBreakdown {
   return result;
 }
 
+function sanitizeGitText(input: string): string {
+  return input
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+    .trim();
+}
+
 function normalizeCommit(raw: GhCommit): CommitSummary {
+  const rawMessage = raw.commit.message.split("\n")[0] ?? "";
+  const rawAuthorName = raw.commit.author?.name ?? "unknown";
+
   return {
     sha: raw.sha,
     shortSha: raw.sha.slice(0, 7),
-    message: raw.commit.message.split("\n")[0] ?? "",
+    message: sanitizeGitText(rawMessage),
     authorLogin: raw.author?.login ?? null,
-    authorName: raw.commit.author?.name ?? "unknown",
+    authorName: sanitizeGitText(rawAuthorName) || "unknown",
     authorAvatarUrl: raw.author?.avatar_url ?? null,
     additions: raw.stats?.additions ?? null,
     deletions: raw.stats?.deletions ?? null,
@@ -104,7 +114,8 @@ export async function fetchRepoSnapshot(
     license: repoData.license?.spdx_id ?? null,
     createdAt: repoData.created_at ?? new Date(0).toISOString(),
     pushedAt: repoData.pushed_at ?? new Date(0).toISOString(),
-    description: repoData.description ?? null,
+    updatedAt: repoData.updated_at ?? new Date(0).toISOString(),
+    description: repoData.description ? sanitizeGitText(repoData.description) : null,
     homepage: repoData.homepage ?? null,
     topics: repoData.topics ?? [],
     visibility: repoData.visibility ?? (repoData.private ? "private" : "public"),
@@ -112,6 +123,22 @@ export async function fetchRepoSnapshot(
   };
 
   const latestCommits = commitsRaw.map(normalizeCommit);
+
+  const latestSha = commitsRaw[0]?.sha;
+  if (latestSha) {
+    try {
+      const detailed = await getCommitWithStats(env, owner, name, latestSha);
+      if (detailed.stats) {
+        latestCommits[0] = {
+          ...latestCommits[0],
+          additions: detailed.stats.additions,
+          deletions: detailed.stats.deletions,
+        };
+      }
+    } catch (err) {
+      console.error(`[normalize] failed to fetch latest commit stats for ${owner}/${name}:`, err);
+    }
+  }
 
   const topContributors: ContributorSummary[] = contributorsRaw
     .filter((c) => Boolean(c.login && c.avatar_url))
@@ -126,7 +153,7 @@ export async function fetchRepoSnapshot(
   const latestRelease: ReleaseSummary | null = latestReleaseRaw
     ? {
         tagName: latestReleaseRaw.tag_name,
-        name: latestReleaseRaw.name,
+        name: latestReleaseRaw.name ? sanitizeGitText(latestReleaseRaw.name) : null,
         publishedAt: latestReleaseRaw.published_at,
         isPrerelease: latestReleaseRaw.prerelease,
         isDraft: latestReleaseRaw.draft,
@@ -144,7 +171,13 @@ export async function fetchRepoSnapshot(
   };
 
   return {
-    repo: { owner, name, fullName: `${owner}/${name}` },
+    repo: {
+      owner,
+      name,
+      fullName: `${owner}/${name}`,
+      ownerAvatarUrl: repoData.owner?.avatar_url ?? null,
+      ownerType: repoData.owner?.type ?? null,
+    },
     stats,
     languages: normalizeLanguages(languagesRaw),
     latestCommits,
@@ -171,7 +204,7 @@ function normalizeTag(raw: GhTag): TagSummary {
 function normalizeIssue(raw: GhIssue): IssueSummary {
   return {
     number: raw.number,
-    title: raw.title,
+    title: sanitizeGitText(raw.title),
     state: raw.state,
     authorLogin: raw.user?.login ?? null,
     authorAvatarUrl: raw.user?.avatar_url ?? null,
@@ -186,7 +219,7 @@ function normalizeIssue(raw: GhIssue): IssueSummary {
 function normalizePullRequest(raw: GhPullRequest): PullRequestSummary {
   return {
     number: raw.number,
-    title: raw.title,
+    title: sanitizeGitText(raw.title),
     state: raw.state,
     isDraft: raw.draft,
     authorLogin: raw.user?.login ?? null,

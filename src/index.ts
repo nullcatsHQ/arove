@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
 import { repoRoutes, batchRoutes } from "./routes/repo.js";
 import { healthRoutes } from "./routes/health.js";
 import { webhookRoutes } from "./routes/webhook.js";
@@ -11,6 +12,8 @@ import { runPollTick } from "./jobs/poll-stats.js";
 import type { ApiError, Env } from "./types/arove.js";
 
 const app = new Hono<{ Bindings: Env }>();
+
+app.use(secureHeaders());
 
 app.use(
   "*",
@@ -59,9 +62,7 @@ app.get("/", (c) =>
       health: "GET /v1/health",
     },
     rateLimits: {
-      anonymous: "30 requests/minute per IP",
-      authenticated: "300 requests/minute per API key",
-      note: "Create a free key at POST /v1/keys for a 10x higher limit.",
+      note: "Anonymous requests are rate limited per IP. Provide an API key (POST /v1/keys) for a substantially higher limit. Check the X-RateLimit-* response headers on any request for your current status.",
     },
   })
 );

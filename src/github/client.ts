@@ -77,9 +77,11 @@ export interface GhRepo {
   license: { spdx_id: string } | null;
   created_at: string;
   pushed_at: string;
+  updated_at: string;
   homepage: string | null;
   description: string | null;
   topics?: string[];
+  owner: { login: string; avatar_url: string; type: string } | null;
   visibility?: string;
   network_count?: number;
 }
@@ -129,6 +131,15 @@ export async function getCommits(
   perPage = 10
 ): Promise<GhCommit[]> {
   return githubFetch<GhCommit[]>(env, `/repos/${owner}/${name}/commits?per_page=${perPage}`);
+}
+
+export async function getCommitWithStats(
+  env: Env,
+  owner: string,
+  name: string,
+  sha: string
+): Promise<GhCommit> {
+  return githubFetch<GhCommit>(env, `/repos/${owner}/${name}/commits/${sha}`);
 }
 
 export async function getContributors(

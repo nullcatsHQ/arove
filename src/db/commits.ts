@@ -24,7 +24,9 @@ export async function upsertCommits(
       .prepare(
         `INSERT INTO commits (repo_id, sha, author_login, author_name, message, additions, deletions, committed_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (repo_id, sha) DO NOTHING`
+         ON CONFLICT (repo_id, sha) DO UPDATE SET
+           additions = COALESCE(commits.additions, excluded.additions),
+           deletions = COALESCE(commits.deletions, excluded.deletions)`
       )
       .bind(
         repoId,

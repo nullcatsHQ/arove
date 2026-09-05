@@ -2,6 +2,8 @@ export interface RepoIdentity {
   owner: string;
   name: string;
   fullName: string;
+  ownerAvatarUrl: string | null;
+  ownerType: string | null;
 }
 
 export interface RepoStats {
@@ -17,6 +19,7 @@ export interface RepoStats {
   license: string | null;
   createdAt: string;
   pushedAt: string;
+  updatedAt: string;
   description: string | null;
   homepage: string | null;
   topics: string[];
@@ -38,8 +41,6 @@ export interface CommitSummary {
   authorLogin: string | null;
   authorName: string;
   authorAvatarUrl: string | null;
-  additions: number | null;
-  deletions: number | null;
   committedAt: string;
   url: string;
 }

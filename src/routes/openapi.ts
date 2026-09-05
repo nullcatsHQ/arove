@@ -57,6 +57,12 @@ openapiRoutes.get("/", (c) => {
       "/v1/repo/{owner}/{name}/stats": {
         get: {
           summary: "Get historical snapshot stats over time (requires registration)",
+          parameters: [
+            { name: "owner", in: "path", required: true, schema: { type: "string" } },
+            { name: "name", in: "path", required: true, schema: { type: "string" } },
+            { name: "limit", in: "query", schema: { type: "integer", maximum: 200 } },
+            { name: "page", in: "query", schema: { type: "integer", minimum: 1 } },
+          ],
           responses: { "200": { description: "Stats history" } },
         },
       },
@@ -64,6 +70,10 @@ openapiRoutes.get("/", (c) => {
         get: {
           summary: "Get recent detected events (requires registration)",
           parameters: [
+            { name: "owner", in: "path", required: true, schema: { type: "string" } },
+            { name: "name", in: "path", required: true, schema: { type: "string" } },
+            { name: "limit", in: "query", schema: { type: "integer", maximum: 200 } },
+            { name: "page", in: "query", schema: { type: "integer", minimum: 1 } },
             {
               name: "type",
               in: "query",
