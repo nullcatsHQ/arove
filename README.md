@@ -245,6 +245,6 @@ MIT, see [`LICENSE`](./LICENSE) for the full text.
 </p>
 
 <p align="center">
-  <sub>Copyright, all rights reserved, nullCats™&trade;</sub>
+  <sub>Copyright, all rights reserved, nullCats&trade;</sub>
 </p>
 
