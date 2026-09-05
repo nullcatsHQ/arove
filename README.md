@@ -28,10 +28,8 @@
 </p>
 
 <br>
-
 For whatever you build 
 – nullCats™
-
 <br>
 
 ## The API is already running
@@ -224,7 +222,9 @@ src/
 
 ## Fun fact
 
-This whole project, API tokens included, runs on nothing but free tiers. Zero dollars to build it, zero dollars to keep it running, and that includes the public instance you can already query above.
+We lethally use $0 building this project, runs on nothing but free tiers, and that includes the public instance you can already query above.
+This is a lesson to people who thinks that they can't build anything good if they don't invest any money. Just remember everything is possible if you have the potential.
+At last this is a fun & wonderful experience for me (trmin) building this awesome project. 
 
 <br>
 
@@ -241,10 +241,10 @@ MIT, see [`LICENSE`](./LICENSE) for the full text.
 ---
 
 <p align="center">
-  Made with 🖤 by the nullCats crew
+  Made with 🖤 by the ItzTrmin <3
 </p>
 
 <p align="center">
-  <sub>Copyright, all rights reserved, nullCats&trade;</sub>
+  <sub>Copyright, all rights reserved, nullCats™&trade;</sub>
 </p>
 
