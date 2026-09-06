@@ -36,7 +36,7 @@ app.get("/", (c) =>
   c.json({
     name: "arove",
     description: "Open-source, edge-optimized heartbeat API for GitHub repositories.",
-    docs: "https://github.com/nullcats/arove",
+    docs: "https://github.com/nullcatsHQ/arove",
     endpoints: {
       snapshot: "GET /v1/repo/:owner/:name",
       live: "WS /v1/repo/:owner/:name",

@@ -40,10 +40,18 @@ export async function registerRepo(
 
   const secret = generateWebhookSecret();
 
-  await db
-    .prepare("INSERT INTO repos (owner, name, webhook_secret) VALUES (?, ?, ?)")
-    .bind(owner, name, secret)
-    .run();
+  try {
+    await db
+      .prepare("INSERT INTO repos (owner, name, webhook_secret) VALUES (?, ?, ?)")
+      .bind(owner, name, secret)
+      .run();
+  } catch (err) {
+    // two requests registering the same repo at almost the same moment can both pass
+    // the check above, the unique constraint on owner and name catches the second one
+    const alreadyThere = await findRepo(db, owner, name);
+    if (alreadyThere) return { repo: alreadyThere, wasCreated: false };
+    throw err;
+  }
 
   const created = await findRepo(db, owner, name);
   if (!created) throw new Error("Failed to read back newly registered repo.");

@@ -866,6 +866,9 @@ function handleWebSocketUpgrade(
     }
   };
 
+  const MIN_MS_BETWEEN_MANUAL_REFRESH = 5_000;
+  let lastManualRefreshAt = 0;
+
   server.addEventListener("message", (event: MessageEvent) => {
     if (closed) return;
     let parsed: unknown;
@@ -879,6 +882,9 @@ function handleWebSocketUpgrade(
     const messageType = (parsed as { type: unknown }).type;
 
     if (messageType === "refresh") {
+      const now = Date.now();
+      if (now - lastManualRefreshAt < MIN_MS_BETWEEN_MANUAL_REFRESH) return;
+      lastManualRefreshAt = now;
       void checkForUpdates();
     }
   });

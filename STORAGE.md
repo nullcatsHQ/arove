@@ -1,7 +1,7 @@
 <h3 align="center">Bring your own database</h3>
 
 <p align="center">
-  Arove ships with one database and one cache out of the box because that's the free path for most people. Nothing about how it actually works depends on that specific setup though, and this file is here to prove it.
+  Arove ships with one database and one cache because that's the free path and most people don't need anything else. But it's not glued to either one. This file exists to prove that.
 </p>
 
 <p align="center">
@@ -16,20 +16,20 @@
 
 ## The two folders that matter
 
-Every database call and every cache call in this whole project goes through exactly two places.
-
 ```
-src/db/       all database queries, seven files
-src/cache/    all cache operations, one file called kv.ts
+src/db/       every database query, seven files
+src/cache/    every cache operation, one file called kv.ts
 ```
 
-No route, no scheduled job, no middleware ever touches the database or cache directly. They only ever call the named functions exported from these two spots. So swapping to Postgres, Supabase, MySQL, Redis, or whatever you'd rather run is really just a matter of rewriting these specific files with the same function names and the same shapes. Nothing else in the codebase needs to know or care.
+That's it. That's the whole surface area. No route touches the database directly, no scheduled job reaches into the cache on its own, nothing does. Everything goes through these two folders and calls a named function. So if you want Postgres, Supabase, MySQL, Redis, whatever you already run and trust, you rewrite these files with the same function names and the same shapes, and the rest of the project keeps working like nothing happened.
+
+I built it this way mostly out of habit, not because I planned ahead for this exact request. Turns out keeping storage in one lane makes swapping it out later a lot less painful than I expected.
 
 <br>
 
 ## The contract you need to match
 
-Every function listed below gets called by name somewhere else in the project. Match the name, the parameters, and the return type, and use whatever client library your database or cache actually needs under the hood.
+Below is every function called by name somewhere else in the codebase. Match the name, match the parameters, match the return type. What's inside the function is entirely up to you.
 
 ### src/db/repos.ts
 
@@ -106,22 +106,22 @@ getCounter(kv, key: string): Promise<number>
 setCounter(kv, key: string, value: number, ttlSeconds: number): Promise<void>
 ```
 
-Every `RepoRow`, `CommitRow`, `EventRow`, `SnapshotRow`, `ApiKeyRow`, `CreatedApiKey`, `InsertSnapshotInput`, and `RateLimitResult` type lives in the same file as the functions that use it. Keep those shapes identical too, routes destructure specific fields off them and won't forgive a renamed field.
+The `RepoRow`, `CommitRow`, `EventRow`, `SnapshotRow`, `ApiKeyRow`, `CreatedApiKey`, `InsertSnapshotInput`, and `RateLimitResult` types all live next to whichever function actually uses them. Don't rename a field on any of these without checking who reads it, routes pull specific fields off these objects and they won't guess what you meant.
 
 > [!TIP]
-> Start with `src/db/repos.ts` and `src/cache/kv.ts` first. Those two get exercised by nearly every request, so getting them right early saves you from chasing errors across the whole file list later.
+> Do `repos.ts` and `kv.ts` first. Nearly every request touches both of those, get them solid before you bother with the rest.
 
 <br>
 
 ## What actually changes
 
-Every function above takes a database or cache handle as its first argument. Right now that's typed as whatever binding your platform hands you. Swap providers and that first parameter's type changes to whatever your client library gives you instead, a `postgres.js` `Sql` instance, an `ioredis` client, a Supabase client, anything at all. Every call site elsewhere just passes the handle through without caring what type it actually is, TypeScript only checks the shape at the point of definition.
+Every one of those functions takes a database or cache handle as its first argument. Today that's whatever binding type your platform hands you. Swap it out and that first argument becomes whatever your own client gives you, a `postgres.js` connection, an `ioredis` client, a Supabase client, doesn't matter which. Nobody calling these functions cares what type that first argument is, TypeScript only checks that at the point where the function is defined, not everywhere it's used.
 
 <br>
 
 ## Postgres example
 
-Here's `findRepo` and `registerRepo` from `repos.ts` rebuilt against Postgres with `postgres.js`, just to show the real shape of the swap instead of describing it in the abstract.
+`findRepo` and `registerRepo` from `repos.ts`, rebuilt against Postgres with `postgres.js`. Easier to just show it than explain it.
 
 ```ts
 import postgres from "postgres";
@@ -165,7 +165,7 @@ export async function registerRepo(
 }
 ```
 
-The schema needs the usual SQLite to Postgres translation too. `INTEGER PRIMARY KEY AUTOINCREMENT` becomes `SERIAL PRIMARY KEY` or `GENERATED ALWAYS AS IDENTITY`, text timestamps become `TIMESTAMPTZ`, and `datetime('now')` becomes `now()`. `src/db/schema.sql` and the files under `src/db/migrations` are the full source of truth for every table and column that exists. Translate those first, then translate the functions.
+You'll need to translate the schema too, same old SQLite to Postgres story. `INTEGER PRIMARY KEY AUTOINCREMENT` turns into `SERIAL PRIMARY KEY` or `GENERATED ALWAYS AS IDENTITY`, text timestamps turn into `TIMESTAMPTZ`, `datetime('now')` turns into `now()`. Everything that exists lives in `src/db/schema.sql`, that's the whole picture, nothing hidden elsewhere. Do that translation first, then move on to the functions.
 
 <br>
 
@@ -192,13 +192,13 @@ export async function setCachedSnapshot<T>(
 }
 ```
 
-The rest of the file follows the same pattern. Redis's `SET` with an expiry and a plain `GET` map directly onto every TTL based function in `kv.ts`. Honestly, `incrementSubscriberCount` and `decrementSubscriberCount` would even get better on Redis, real `INCR` and `DECR` instead of the read then write dance a plain key value store forces on you. That's not a hypothetical, it's a genuine correctness upgrade if you go this route.
+Same pattern the rest of the way through. `SET` with an expiry and a plain `GET` cover nearly every TTL based function in `kv.ts` without much thought. One thing worth calling out though, `incrementSubscriberCount` and `decrementSubscriberCount` are currently a read followed by a write, because a plain key value store doesn't give you an atomic increment. Redis does. `INCR` and `DECR` fix that outright, not a nice to have, an actual correctness improvement over what's there now.
 
 <br>
 
 ## Wiring it into the entry point
 
-The entry point reads its database and cache handles off an environment object that only exists because of the bindings declared in the config file. Deploying somewhere that doesn't use that pattern at all, say a plain Node server? Construct your database and cache clients directly at startup and pass them through request context instead.
+The entry point pulls its database and cache handles off an environment object, and that object only exists because of the bindings declared in the config file. If you're running somewhere that doesn't work that way at all, a plain Node server for instance, build your clients at startup and hand them off through request context instead.
 
 ```ts
 const sql = postgres(process.env.DATABASE_URL!);
@@ -211,18 +211,18 @@ app.use("*", async (c, next) => {
 });
 ```
 
-Every route's reference to the database binding becomes a reference to whatever you named it in context, same for the cache. It's a mechanical find and replace across the route files once the storage layer itself is rebuilt, the call shape never changes, only where the handle actually comes from.
+After that it's just find and replace across the route files, every place that referenced the old binding now references whatever you named it in context. The call shape doesn't move, only where the handle comes from.
 
 <br>
 
 ## What doesn't need to change at all
 
-- `src/github`, the GitHub API client and token pool don't know or care what storage you're using
-- `src/routes`, every route calls the storage layer through its function contract, never the client underneath it
-- `src/jobs/poll-stats.ts`, same story, calls through the contract
-- `src/types/arove.ts`, the public API response shapes have nothing to do with storage
+- `src/github`, doesn't know what storage you're using and doesn't need to
+- `src/routes`, only ever talks to storage through the contract above, never straight to a client
+- `src/jobs/poll-stats.ts`, same deal
+- `src/types/arove.ts`, the response shapes have nothing to do with any of this
 
-The `Env` type in `types/arove.ts` currently types the database and cache fields as your platform's specific binding types. Update just those two lines to your own client types once the replacement modules exist, and TypeScript will point out every single spot the contract doesn't line up. It's genuinely a good feeling watching that list shrink to zero.
+The only two lines that actually need touching are in `Env`, inside `types/arove.ts`, where the database and cache fields are typed. Change those two once your replacement modules exist and TypeScript will hunt down every place that still expects the old shape. Watching that error list shrink to zero is oddly satisfying, not going to lie.
 
 <br>
 

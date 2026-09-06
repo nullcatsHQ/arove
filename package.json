@@ -9,8 +9,7 @@
     "typecheck": "tsc --noEmit",
     "db:init": "wrangler d1 execute arove-db --file=./src/db/schema.sql",
     "db:init:remote": "wrangler d1 execute arove-db --remote --file=./src/db/schema.sql",
-    "db:migrate:webhooks:remote": "wrangler d1 execute arove-db --remote --file=./src/db/migrations/001_add_webhook_columns.sql",
-    "db:migrate:keys:remote": "wrangler d1 execute arove-db --remote --file=./src/db/migrations/002_add_api_keys.sql"
+    "db:upgrade:remote": "wrangler d1 execute arove-db --remote --file=./src/db/upgrade.sql"
   },
   "license": "MIT",
   "dependencies": {

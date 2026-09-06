@@ -29,7 +29,7 @@
 
 <br>
 For whatever you build 
-– nullCats™
+for nullCats™
 <br>
 
 ## The API is already running
@@ -150,7 +150,7 @@ npm install
 
 Then, in order:
 
-**1. Database.** Create a SQL database through your platform's dashboard, then run `src/db/schema.sql` against it through the query console. If you're upgrading an existing deployment, also run whatever's inside `src/db/migrations` that you haven't applied yet, they're additive and safe to run against real data.
+**1. Database.** Create a SQL database through your platform's dashboard, then run `src/db/schema.sql` against it through the query console. That's everything a fresh database needs. If you're upgrading a copy that was already running before webhooks and API keys existed, also run `src/db/upgrade.sql` once, it adds the couple of pieces that were missing.
 
 **2. Cache.** Create a key value store alongside it. Arove uses this for short lived caching, rate limit counters, and a few coordination flags. It starts empty and fills in on its own.
 

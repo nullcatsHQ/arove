@@ -36,7 +36,10 @@ async function isTokenExhausted(env: Env, tokenIndex: number): Promise<boolean> 
   return getFlag(env.CACHE, `${EXHAUSTED_PREFIX}${tokenIndex}`);
 }
 
-export async function pickToken(env: Env): Promise<{ token: string; index: number }> {
+export async function pickToken(
+  env: Env,
+  skipIndexes: Set<number> = new Set()
+): Promise<{ token: string; index: number }> {
   const tokens = getConfiguredTokens(env);
 
   if (tokens.length === 1) {
@@ -47,6 +50,7 @@ export async function pickToken(env: Env): Promise<{ token: string; index: numbe
 
   for (let offset = 0; offset < tokens.length; offset++) {
     const index = (start + offset) % tokens.length;
+    if (skipIndexes.has(index)) continue;
     const exhausted = await isTokenExhausted(env, index);
     if (!exhausted) {
       await setCounter(env.CACHE, ROUND_ROBIN_KEY, (index + 1) % tokens.length, 3600);
@@ -54,7 +58,9 @@ export async function pickToken(env: Env): Promise<{ token: string; index: numbe
     }
   }
 
-  return { token: tokens[start % tokens.length], index: start % tokens.length };
+  // every token is either exhausted or already tried this request, just hand back the next one in line
+  const fallbackIndex = start % tokens.length;
+  return { token: tokens[fallbackIndex], index: fallbackIndex };
 }
 
 export function getTokenPoolSize(env: Env): number {

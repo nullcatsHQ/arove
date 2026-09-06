@@ -8,7 +8,7 @@ function headers(token: string): HeadersInit {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "arove/0.3.0 (+https://github.com/nullcats/arove)",
+    "User-Agent": "arove/0.3.0 (+https://github.com/nullcatsHQ/arove)",
   };
 }
 
@@ -32,9 +32,11 @@ function isRateLimitResponse(res: Response): boolean {
 async function githubFetch<T>(env: Env, path: string): Promise<T> {
   const maxAttempts = 3;
   let lastError: GitHubApiError | null = null;
+  const triedIndexes = new Set<number>();
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const { token, index } = await pickToken(env);
+    const { token, index } = await pickToken(env, triedIndexes);
+    triedIndexes.add(index);
     const res = await fetch(`${GITHUB_API}${path}`, { headers: headers(token) });
 
     if (isRateLimitResponse(res)) {
@@ -268,24 +270,4 @@ export async function getPullRequests(
     env,
     `/repos/${owner}/${name}/pulls?per_page=${perPage}&state=${state}`
   );
-}
-
-export async function getRateLimitForToken(token: string): Promise<{
-  limit: number;
-  remaining: number;
-  resetAt: string;
-}> {
-  const res = await fetch(`${GITHUB_API}/rate_limit`, { headers: headers(token) });
-  if (!res.ok) {
-    throw new GitHubApiError(res.status, "Failed to fetch rate limit status");
-  }
-  const data = (await res.json()) as {
-    resources: { core: { limit: number; remaining: number; reset: number } };
-  };
-  const core = data.resources.core;
-  return {
-    limit: core.limit,
-    remaining: core.remaining,
-    resetAt: new Date(core.reset * 1000).toISOString(),
-  };
 }

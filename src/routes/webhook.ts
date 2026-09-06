@@ -78,42 +78,52 @@ webhookRoutes.post("/github", async (c) => {
   await markWebhookReceived(c.env.DB, repo.id);
 
   const aroveEventType = githubEvent ? GITHUB_EVENT_TO_AROVE[githubEvent] : undefined;
+  const fullName = `${owner}/${name}`;
 
+  let snapshotForEvent: Awaited<ReturnType<typeof fetchRepoSnapshot>> | null = null;
   try {
-    const snapshot = await fetchRepoSnapshot(c.env, owner, name);
-    const fullName = `${owner}/${name}`;
-
-    if (aroveEventType) {
-      const eventPayload: Record<string, unknown> =
-        aroveEventType === "release" && snapshot.latestRelease
-          ? {
-              tag: snapshot.latestRelease.tagName,
-              name: snapshot.latestRelease.name,
-              url: snapshot.latestRelease.url,
-              source: "webhook",
-            }
-          : { action: payload.action ?? null, source: "webhook" };
-
-      await insertEvent(c.env.DB, repo.id, aroveEventType, eventPayload);
-    }
-
-    await Promise.all([
-      setCachedSnapshot(c.env.CACHE, fullName, snapshot),
-      insertSnapshot(c.env.DB, {
-        repoId: repo.id,
-        stars: snapshot.stats.stars,
-        forks: snapshot.stats.forks,
-        watchers: snapshot.stats.watchers,
-        openIssues: snapshot.stats.openIssues,
-        openPullRequests: snapshot.stats.openPullRequests,
-        languageBreakdown: snapshot.languages,
-        sizeKb: snapshot.stats.sizeKb,
-        defaultBranch: snapshot.stats.defaultBranch,
-      }),
-      upsertCommits(c.env.DB, repo.id, snapshot.latestCommits),
-    ]);
+    snapshotForEvent = await fetchRepoSnapshot(c.env, owner, name);
   } catch (err) {
-    console.error(`[webhook] refresh fetch failed for ${owner}/${name}:`, err);
+    console.error(`[webhook] snapshot refresh failed for ${fullName}:`, err);
+  }
+
+  // log the event regardless of whether the snapshot refresh above worked, GitHub
+  // won't retry a 200 and losing the event record on a bad fetch would be worse
+  // than logging it with a slightly stale release payload
+  if (aroveEventType) {
+    const eventPayload: Record<string, unknown> =
+      aroveEventType === "release" && snapshotForEvent?.latestRelease
+        ? {
+            tag: snapshotForEvent.latestRelease.tagName,
+            name: snapshotForEvent.latestRelease.name,
+            url: snapshotForEvent.latestRelease.url,
+            source: "webhook",
+          }
+        : { action: payload.action ?? null, source: "webhook" };
+
+    await insertEvent(c.env.DB, repo.id, aroveEventType, eventPayload);
+  }
+
+  if (snapshotForEvent) {
+    try {
+      await Promise.all([
+        setCachedSnapshot(c.env.CACHE, fullName, snapshotForEvent),
+        insertSnapshot(c.env.DB, {
+          repoId: repo.id,
+          stars: snapshotForEvent.stats.stars,
+          forks: snapshotForEvent.stats.forks,
+          watchers: snapshotForEvent.stats.watchers,
+          openIssues: snapshotForEvent.stats.openIssues,
+          openPullRequests: snapshotForEvent.stats.openPullRequests,
+          languageBreakdown: snapshotForEvent.languages,
+          sizeKb: snapshotForEvent.stats.sizeKb,
+          defaultBranch: snapshotForEvent.stats.defaultBranch,
+        }),
+        upsertCommits(c.env.DB, repo.id, snapshotForEvent.latestCommits),
+      ]);
+    } catch (err) {
+      console.error(`[webhook] storing refreshed snapshot failed for ${fullName}:`, err);
+    }
   }
 
   return c.json({ received: true, event: githubEvent ?? "unknown" });
