@@ -9,6 +9,7 @@ import { keyRoutes } from "./routes/keys.js";
 import { openapiRoutes } from "./routes/openapi.js";
 import { rateLimitAndAuth } from "./middleware/auth.js";
 import { runPollTick } from "./jobs/poll-stats.js";
+import { revokeStaleKeys } from "./db/api-keys.js";
 import type { ApiError, Env } from "./types/arove.js";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -102,7 +103,15 @@ app.onError((err, c) => {
 
 export default {
   fetch: app.fetch,
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    if (controller.cron === "0 0 * * *") {
+      ctx.waitUntil(
+        revokeStaleKeys(env.DB).then((count) => {
+          if (count > 0) console.log(`[keys] revoked ${count} key(s) inactive for 180+ days`);
+        })
+      );
+      return;
+    }
     ctx.waitUntil(runPollTick(env));
   },
 };

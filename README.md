@@ -226,6 +226,8 @@ curl -H "Authorization: Bearer your-key-here" https://api.arove.workers.dev/v1/k
 
 No accounts anywhere in this system, so this is also the only way to look a key up at all. There's no dashboard sitting behind it, just the token in your hand.
 
+One thing worth actually knowing, a key that sits completely unused for 180 days quietly stops working on its own. Nothing personal, it's just a cleanup pass for keys that got forgotten somewhere, not a punishment for anything. If you're checking usage every so often anyway, you'll never come close to hitting it.
+
 <br>
 
 ## Project layout
