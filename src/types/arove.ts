@@ -43,6 +43,10 @@ export interface CommitSummary {
   authorAvatarUrl: string | null;
   committedAt: string;
   url: string;
+  additions: number | null;
+  deletions: number | null;
+  filesChanged: number | null;
+  branches: string[] | null;
 }
 
 export interface ContributorSummary {
@@ -50,6 +54,7 @@ export interface ContributorSummary {
   avatarUrl: string;
   contributions: number;
   profileUrl: string;
+  lastCommitMessage: string | null;
 }
 
 export interface ReleaseSummary {

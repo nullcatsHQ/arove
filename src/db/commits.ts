@@ -9,6 +9,8 @@ export interface CommitRow {
   message: string | null;
   additions: number | null;
   deletions: number | null;
+  files_changed: number | null;
+  branches: string | null;
   committed_at: string | null;
 }
 
@@ -22,11 +24,13 @@ export async function upsertCommits(
   const statements = commits.map((c) =>
     db
       .prepare(
-        `INSERT INTO commits (repo_id, sha, author_login, author_name, message, additions, deletions, committed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO commits (repo_id, sha, author_login, author_name, message, additions, deletions, files_changed, branches, committed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (repo_id, sha) DO UPDATE SET
            additions = COALESCE(commits.additions, excluded.additions),
-           deletions = COALESCE(commits.deletions, excluded.deletions)`
+           deletions = COALESCE(commits.deletions, excluded.deletions),
+           files_changed = COALESCE(commits.files_changed, excluded.files_changed),
+           branches = COALESCE(commits.branches, excluded.branches)`
       )
       .bind(
         repoId,
@@ -36,6 +40,8 @@ export async function upsertCommits(
         c.message,
         c.additions,
         c.deletions,
+        c.filesChanged,
+        c.branches ? JSON.stringify(c.branches) : null,
         c.committedAt
       )
   );

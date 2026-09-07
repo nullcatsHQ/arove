@@ -3,6 +3,7 @@ import {
   getLanguages,
   getCommits,
   getCommitWithStats,
+  getBranchesWhereHead,
   getContributors,
   getReleases,
   hasReadme,
@@ -69,6 +70,8 @@ function normalizeCommit(raw: GhCommit): CommitSummary {
     authorAvatarUrl: raw.author?.avatar_url ?? null,
     additions: raw.stats?.additions ?? null,
     deletions: raw.stats?.deletions ?? null,
+    filesChanged: raw.files?.length ?? null,
+    branches: null,
     committedAt: raw.commit.author?.date ?? new Date(0).toISOString(),
     url: raw.html_url,
   };
@@ -127,27 +130,35 @@ export async function fetchRepoSnapshot(
   const latestSha = commitsRaw[0]?.sha;
   if (latestSha) {
     try {
-      const detailed = await getCommitWithStats(env, owner, name, latestSha);
-      if (detailed.stats) {
-        latestCommits[0] = {
-          ...latestCommits[0],
-          additions: detailed.stats.additions,
-          deletions: detailed.stats.deletions,
-        };
-      }
+      const [detailed, branchesWhereHead] = await Promise.all([
+        getCommitWithStats(env, owner, name, latestSha),
+        getBranchesWhereHead(env, owner, name, latestSha).catch(() => []),
+      ]);
+
+      latestCommits[0] = {
+        ...latestCommits[0],
+        additions: detailed.stats?.additions ?? null,
+        deletions: detailed.stats?.deletions ?? null,
+        filesChanged: detailed.files?.length ?? null,
+        branches: branchesWhereHead.length > 0 ? branchesWhereHead.map((b) => b.name) : null,
+      };
     } catch (err) {
-      console.error(`[normalize] failed to fetch latest commit stats for ${owner}/${name}:`, err);
+      console.error(`[normalize] failed to fetch latest commit detail for ${owner}/${name}:`, err);
     }
   }
 
   const topContributors: ContributorSummary[] = contributorsRaw
     .filter((c) => Boolean(c.login && c.avatar_url))
-    .map((c) => ({
-      login: c.login,
-      avatarUrl: c.avatar_url,
-      contributions: c.contributions,
-      profileUrl: `https://github.com/${c.login}`,
-    }));
+    .map((c) => {
+      const lastCommitByThem = latestCommits.find((commit) => commit.authorLogin === c.login);
+      return {
+        login: c.login,
+        avatarUrl: c.avatar_url,
+        contributions: c.contributions,
+        profileUrl: `https://github.com/${c.login}`,
+        lastCommitMessage: lastCommitByThem?.message ?? null,
+      };
+    });
 
   const latestReleaseRaw = releasesRaw[0] ?? null;
   const latestRelease: ReleaseSummary | null = latestReleaseRaw

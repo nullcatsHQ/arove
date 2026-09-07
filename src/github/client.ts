@@ -97,6 +97,11 @@ export interface GhCommit {
   author: { login: string; avatar_url: string } | null;
   html_url: string;
   stats?: { additions: number; deletions: number };
+  files?: Array<{ filename: string }>;
+}
+
+export interface GhBranchWhereHead {
+  name: string;
 }
 
 export interface GhContributor {
@@ -142,6 +147,18 @@ export async function getCommitWithStats(
   sha: string
 ): Promise<GhCommit> {
   return githubFetch<GhCommit>(env, `/repos/${owner}/${name}/commits/${sha}`);
+}
+
+export async function getBranchesWhereHead(
+  env: Env,
+  owner: string,
+  name: string,
+  sha: string
+): Promise<GhBranchWhereHead[]> {
+  return githubFetch<GhBranchWhereHead[]>(
+    env,
+    `/repos/${owner}/${name}/commits/${sha}/branches-where-head`
+  );
 }
 
 export async function getContributors(

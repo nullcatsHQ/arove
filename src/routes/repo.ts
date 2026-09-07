@@ -238,9 +238,14 @@ repoRoutes.get("/:owner/:name/commits", async (c) => {
     countCommits(c.env.DB, repo.id),
   ]);
 
+  const parsedCommits = commits.map((row) => ({
+    ...row,
+    branches: row.branches ? (JSON.parse(row.branches) as string[]) : null,
+  }));
+
   return c.json({
     repo: `${owner}/${name}`,
-    commits,
+    commits: parsedCommits,
     pagination: buildPaginationMeta(page, limit, total),
   });
 });
@@ -269,9 +274,14 @@ repoRoutes.get("/:owner/:name/stats", async (c) => {
     countSnapshots(c.env.DB, repo.id),
   ]);
 
+  const parsedHistory = history.map((row) => ({
+    ...row,
+    language_breakdown: JSON.parse(row.language_breakdown) as Record<string, number>,
+  }));
+
   return c.json({
     repo: `${owner}/${name}`,
-    history,
+    history: parsedHistory,
     pagination: buildPaginationMeta(page, limit, total),
   });
 });

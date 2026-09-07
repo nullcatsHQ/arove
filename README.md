@@ -76,7 +76,18 @@ curl https://api.arove.workers.dev/v1/repo/vercel/next.js
       "shortSha": "c3bdfff",
       "message": "fix: patch update for edge runtime",
       "authorLogin": "someone",
-      "committedAt": "2026-09-04T09:52:24Z"
+      "committedAt": "2026-09-04T09:52:24Z",
+      "additions": 101,
+      "deletions": 111,
+      "filesChanged": 12,
+      "branches": ["main"]
+    }
+  ],
+  "topContributors": [
+    {
+      "login": "someone",
+      "contributions": 128,
+      "lastCommitMessage": "fix: patch update for edge runtime"
     }
   ],
   "health": {
@@ -88,6 +99,8 @@ curl https://api.arove.workers.dev/v1/repo/vercel/next.js
 ```
 
 That's trimmed down for readability, and the numbers are just illustrative rather than something pulled live for this page. The actual response includes full contributor lists, release info, and everything else described below. You don't need to register a repo before asking about it either, an unregistered one just gets fetched fresh on the spot instead of pulled from stored history.
+
+One honest limit worth knowing, `additions`, `deletions`, `filesChanged`, and `branches` only ever show up on the single newest commit. Getting that level of detail costs an extra call per commit, so pulling it for the full list on every single request would get expensive fast, older commits in the list still show everything else, just not that part.
 
 Want updates pushed to you instead of asking again and again? Open that same address as a WebSocket instead of a plain request and you'll get events as they happen.
 

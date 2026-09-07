@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS commits (
   message TEXT,
   additions INTEGER,
   deletions INTEGER,
+  files_changed INTEGER,
+  branches TEXT,
   committed_at TEXT,
   UNIQUE (repo_id, sha)
 );
