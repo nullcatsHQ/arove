@@ -53,6 +53,46 @@ keyRoutes.post("/", async (c) => {
   );
 });
 
+keyRoutes.get("/usage", async (c) => {
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const result = await checkRateLimit(
+    c.env.CACHE,
+    `key-usage:${ip}`,
+    KEY_CREATION_LIMIT_PER_HOUR,
+    KEY_CREATION_WINDOW_SECONDS
+  );
+
+  if (!result.allowed) {
+    return c.json(
+      errorResponse(429, "rate_limited", "Too many usage checks recently from this address. Try again later."),
+      429
+    );
+  }
+
+  const authHeader = c.req.header("authorization");
+  const rawKey = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+
+  if (!rawKey) {
+    return c.json(
+      errorResponse(400, "missing_key", "Provide your key as a Bearer token to check its own usage."),
+      400
+    );
+  }
+
+  const keyRow = await findApiKeyByRawKey(c.env.DB, rawKey);
+  if (!keyRow) {
+    return c.json(errorResponse(404, "key_not_found", "No active key matches that value."), 404);
+  }
+
+  return c.json({
+    prefix: keyRow.key_prefix,
+    label: keyRow.label,
+    createdAt: keyRow.created_at,
+    lastUsedAt: keyRow.last_used_at,
+    requestCount: keyRow.request_count,
+  });
+});
+
 keyRoutes.post("/revoke", async (c) => {
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
   const result = await checkRateLimit(

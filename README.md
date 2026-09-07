@@ -127,6 +127,7 @@ Want updates pushed to you instead of asking again and again? Open that same add
 | `POST /v1/repo/:owner/:name/register` | Start tracking history and enable webhooks |
 | `GET /v1/repos?repos=a/b,c/d` | Batch lookup, up to 20 repos in one call |
 | `POST /v1/keys` | Free, self serve API key for a higher rate limit |
+| `GET /v1/keys/usage` | Check a key's own creation date, last use, and request count |
 | `GET /v1/openapi.json` | Full OpenAPI spec |
 
 Every one of these already works against `api.arove.workers.dev`, no setup needed on your end.
@@ -216,6 +217,14 @@ curl -X POST https://api.arove.workers.dev/v1/keys
 ```
 
 That hands you back a key on the spot, no email, no waiting. Use it as a bearer token and your limit goes up substantially. The exact numbers aren't published here on purpose, check the `X-RateLimit-Remaining` header on any response if you want to know exactly where you stand.
+
+Want to check how much a key's actually been used, or when it was made? Same bearer token, different endpoint.
+
+```bash
+curl -H "Authorization: Bearer your-key-here" https://api.arove.workers.dev/v1/keys/usage
+```
+
+No accounts anywhere in this system, so this is also the only way to look a key up at all. There's no dashboard sitting behind it, just the token in your hand.
 
 <br>
 

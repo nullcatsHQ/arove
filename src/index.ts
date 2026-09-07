@@ -57,6 +57,7 @@ app.get("/", (c) =>
       webhookRegenerate: "POST /v1/repo/:owner/:name/webhook",
       batch: "GET /v1/repos?repos=owner/name,owner2/name2",
       createApiKey: "POST /v1/keys",
+      checkApiKeyUsage: "GET /v1/keys/usage",
       revokeApiKey: "POST /v1/keys/revoke",
       openapi: "GET /v1/openapi.json",
       health: "GET /v1/health",

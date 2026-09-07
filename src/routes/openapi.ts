@@ -179,6 +179,13 @@ openapiRoutes.get("/", (c) => {
           responses: { "201": { description: "New key (shown once)" } },
         },
       },
+      "/v1/keys/usage": {
+        get: {
+          summary: "Check a key's own creation date, last use, and request count",
+          security: [{ bearerAuth: [] }],
+          responses: { "200": { description: "Usage details" }, "404": { description: "Key not found" } },
+        },
+      },
       "/v1/keys/revoke": {
         post: {
           summary: "Revoke an API key",
