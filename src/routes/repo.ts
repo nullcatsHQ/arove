@@ -457,17 +457,22 @@ repoRoutes.get("/:owner/:name/badge", async (c) => {
 
   let value: string;
   try {
-    const snapshot = await getSnapshotOrFetch(c.env, owner, name);
+    const repoData = await getCachedListOrFetch(
+      c.env,
+      `badge-repo:${owner}/${name}`,
+      () => getRepo(c.env, owner, name),
+      60
+    );
     switch (label) {
       case "forks":
-        value = String(snapshot.stats.forks);
+        value = String(repoData.forks_count ?? 0);
         break;
       case "issues":
-        value = String(snapshot.stats.openIssues);
+        value = String(repoData.open_issues_count ?? 0);
         break;
       case "stars":
       default:
-        value = String(snapshot.stats.stars);
+        value = String(repoData.stargazers_count ?? 0);
         break;
     }
   } catch {

@@ -142,6 +142,8 @@ Since Arove exposes a badge endpoint, you can embed a live stat straight into yo
 
 Swap the owner and repo, pick a label of stars, forks, or issues, and pick whatever color fits your README. It updates on its own every time someone loads the page.
 
+This one's kept deliberately light on purpose, it only ever asks GitHub for the single number it needs, not the full snapshot, so it stays fast even embedded somewhere that gets loaded a lot.
+
 <br>
 
 ## Why it exists

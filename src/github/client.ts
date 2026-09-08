@@ -29,6 +29,28 @@ function isRateLimitResponse(res: Response): boolean {
   return false;
 }
 
+async function githubHead(env: Env, path: string): Promise<boolean> {
+  const maxAttempts = 3;
+  const triedIndexes = new Set<number>();
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { token, index } = await pickToken(env, triedIndexes);
+    triedIndexes.add(index);
+    const res = await fetch(`${GITHUB_API}${path}`, { method: "HEAD", headers: headers(token) });
+
+    if (isRateLimitResponse(res)) {
+      const resetHeader = res.headers.get("x-ratelimit-reset");
+      const resetAt = resetHeader ? Number(resetHeader) : Math.floor(Date.now() / 1000) + 60;
+      await markTokenExhausted(env, index, resetAt);
+      continue;
+    }
+
+    return res.ok;
+  }
+
+  return false;
+}
+
 async function githubFetch<T>(env: Env, path: string): Promise<T> {
   const maxAttempts = 3;
   let lastError: GitHubApiError | null = null;
@@ -183,12 +205,7 @@ export async function getReleases(
 }
 
 export async function hasReadme(env: Env, owner: string, name: string): Promise<boolean> {
-  try {
-    await githubFetch(env, `/repos/${owner}/${name}/readme`);
-    return true;
-  } catch {
-    return false;
-  }
+  return githubHead(env, `/repos/${owner}/${name}/readme`);
 }
 
 export async function getOpenPullRequestCount(
