@@ -126,26 +126,17 @@ export async function fetchRepoSnapshot(
   };
 
   const latestCommits = commitsRaw.map(normalizeCommit);
-
   const latestSha = commitsRaw[0]?.sha;
-  if (latestSha) {
-    try {
-      const [detailed, branchesWhereHead] = await Promise.all([
+
+  const commitDetailPromise = latestSha
+    ? Promise.all([
         getCommitWithStats(env, owner, name, latestSha),
         getBranchesWhereHead(env, owner, name, latestSha).catch(() => []),
-      ]);
-
-      latestCommits[0] = {
-        ...latestCommits[0],
-        additions: detailed.stats?.additions ?? null,
-        deletions: detailed.stats?.deletions ?? null,
-        filesChanged: detailed.files?.length ?? null,
-        branches: branchesWhereHead.length > 0 ? branchesWhereHead.map((b) => b.name) : null,
-      };
-    } catch (err) {
-      console.error(`[normalize] failed to fetch latest commit detail for ${owner}/${name}:`, err);
-    }
-  }
+      ]).catch((err) => {
+        console.error(`[normalize] failed to fetch latest commit detail for ${owner}/${name}:`, err);
+        return null;
+      })
+    : Promise.resolve(null);
 
   const topContributors: ContributorSummary[] = contributorsRaw
     .filter((c) => Boolean(c.login && c.avatar_url))
@@ -180,6 +171,18 @@ export async function fetchRepoSnapshot(
     daysSinceLastRelease: daysSince(latestRelease?.publishedAt ?? null),
     openIssueRatio: null,
   };
+
+  const commitDetail = await commitDetailPromise;
+  if (commitDetail) {
+    const [detailed, branchesWhereHead] = commitDetail;
+    latestCommits[0] = {
+      ...latestCommits[0],
+      additions: detailed.stats?.additions ?? null,
+      deletions: detailed.stats?.deletions ?? null,
+      filesChanged: detailed.files?.length ?? null,
+      branches: branchesWhereHead.length > 0 ? branchesWhereHead.map((b) => b.name) : null,
+    };
+  }
 
   return {
     repo: {
