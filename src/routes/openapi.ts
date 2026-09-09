@@ -11,7 +11,7 @@ openapiRoutes.get("/", (c) => {
     info: {
       title: "Arove API",
       description:
-        "Open-source, edge-optimized REST + WebSocket heartbeat for GitHub repositories.",
+        "Turns any public GitHub repo into live JSON, plus a WebSocket if you want updates pushed instead of asking again and again.",
       version: "0.3.0",
       license: { name: "MIT" },
     },

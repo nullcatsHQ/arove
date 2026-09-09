@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getTokenPoolSize } from "../github/token-pool.js";
-import { countRegisteredRepos } from "../db/repos.js";
+import { countRegisteredRepos, checkCommitsSchema } from "../db/repos.js";
 import { healthCheckPing } from "../cache/kv.js";
 import type { Env } from "../types/arove.js";
 
@@ -11,10 +11,12 @@ healthRoutes.get("/", async (c) => {
     kv: "ok",
     d1: "ok",
     github: "ok",
+    schema: "ok",
   };
 
   let registeredRepoCount: number | null = null;
   let tokenPoolSize = 0;
+  let missingColumns: string[] = [];
 
   try {
     await healthCheckPing(c.env.CACHE);
@@ -29,6 +31,16 @@ healthRoutes.get("/", async (c) => {
   }
 
   try {
+    const schemaCheck = await checkCommitsSchema(c.env.DB);
+    if (!schemaCheck.ok) {
+      checks.schema = "error";
+      missingColumns = schemaCheck.missing;
+    }
+  } catch {
+    checks.schema = "error";
+  }
+
+  try {
     tokenPoolSize = getTokenPoolSize(c.env);
   } catch {
     checks.github = "error";
@@ -40,6 +52,7 @@ healthRoutes.get("/", async (c) => {
     {
       status: allOk ? "healthy" : "degraded",
       checks,
+      missingColumns: missingColumns.length > 0 ? missingColumns : undefined,
       tokenPoolConfigured: tokenPoolSize > 0,
       registeredRepoCount,
       timestamp: new Date().toISOString(),

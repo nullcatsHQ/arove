@@ -44,6 +44,8 @@ countRegisteredRepos(db): Promise<number>
 regenerateWebhookSecret(db, repoId: number): Promise<string>
 ```
 
+There's also `checkCommitsSchema`, used only by the health check to confirm the commits table actually has every column the code expects. Worth knowing it exists, but it's not part of the real contract here, it leans directly on `PRAGMA table_info`, a SQLite specific thing with no clean equivalent on Postgres or elsewhere. If you swap databases, just point the health check at whatever introspection your own database gives you instead, or drop that one check entirely, nothing else depends on it.
+
 ### src/db/commits.ts
 
 ```ts

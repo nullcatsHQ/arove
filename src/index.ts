@@ -36,7 +36,7 @@ app.use(
 app.get("/", (c) =>
   c.json({
     name: "arove",
-    description: "Open-source, edge-optimized heartbeat API for GitHub repositories.",
+    description: "Free API that turns any public GitHub repo into live JSON. Built it because I got tired of every stat widget looking the same and locking you into someone else's design.",
     docs: "https://github.com/nullcatsHQ/arove",
     endpoints: {
       snapshot: "GET /v1/repo/:owner/:name",
@@ -64,7 +64,7 @@ app.get("/", (c) =>
       health: "GET /v1/health",
     },
     rateLimits: {
-      note: "Anonymous requests are rate limited per IP. Provide an API key (POST /v1/keys) for a substantially higher limit. Check the X-RateLimit-* response headers on any request for your current status.",
+      note: "You get a fair number of anonymous requests per IP before things slow down, no exact number posted here on purpose. Grab a free key from POST /v1/keys and that ceiling goes up by a lot. Every response carries X-RateLimit-Limit and X-RateLimit-Remaining headers if you actually want to know where you stand right now.",
     },
   })
 );

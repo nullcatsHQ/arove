@@ -84,6 +84,20 @@ export async function countRegisteredRepos(db: D1Database): Promise<number> {
   return row?.count ?? 0;
 }
 
+const EXPECTED_COMMIT_COLUMNS = [
+  "additions",
+  "deletions",
+  "files_changed",
+  "branches",
+] as const;
+
+export async function checkCommitsSchema(db: D1Database): Promise<{ ok: boolean; missing: string[] }> {
+  const result = await db.prepare("PRAGMA table_info(commits)").all<{ name: string }>();
+  const existingColumns = new Set((result.results ?? []).map((row) => row.name));
+  const missing = EXPECTED_COMMIT_COLUMNS.filter((col) => !existingColumns.has(col));
+  return { ok: missing.length === 0, missing };
+}
+
 export async function regenerateWebhookSecret(db: D1Database, repoId: number): Promise<string> {
   const secret = generateWebhookSecret();
   await db
