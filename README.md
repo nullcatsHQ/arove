@@ -10,7 +10,7 @@
 
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
-  <img alt="typescript" src="https://img.shields.io/badge/made%20with-TypeScript-3178c6?style=flat-square&logo=typescript&logoColor=white">
+  <img alt="typescript" src="https://img.shields.io/badge/made%20with-TypeScript-3178c6?style=flat-square&logo=typescript">
   <img alt="hono" src="https://img.shields.io/badge/runtime-Hono-e36002?style=flat-square&logo=hono&logoColor=white">
   <img alt="cost" src="https://img.shields.io/badge/cost-%240-success?style=flat-square">
   <img alt="stars" src="https://img.shields.io/github/stars/nullcatsHQ/arove?style=flat-square">
