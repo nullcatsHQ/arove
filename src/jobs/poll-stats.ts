@@ -77,8 +77,10 @@ export async function pollOneRepo(
     });
   }
 
+  const hasChanges = events.length > 0;
+
   await Promise.all([
-    setCachedSnapshot(env.CACHE, fullName, snapshot),
+    hasChanges ? setCachedSnapshot(env.CACHE, fullName, snapshot) : Promise.resolve(),
     insertSnapshot(env.DB, {
       repoId,
       stars: snapshot.stats.stars,
@@ -98,7 +100,7 @@ export async function pollOneRepo(
     await insertEvent(env.DB, repoId, event.type, event.data);
   }
 
-  if (events.length > 0) {
+  if (hasChanges) {
     await bumpSnapshotVersion(env.CACHE, fullName);
   }
 }

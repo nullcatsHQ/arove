@@ -3,7 +3,7 @@ import { findApiKeyByRawKey, recordApiKeyUsage } from "../db/api-keys.js";
 import { checkRateLimit } from "../cache/kv.js";
 import type { ApiError, Env } from "../types/arove.js";
 
-const WINDOW_SECONDS = 60;
+const WINDOW_SECONDS = 300;
 
 function parseLimit(raw: string | undefined, fallback: number): number {
   const parsed = Number(raw);
@@ -21,8 +21,8 @@ function errorResponse(status: number, error: string, message: string): ApiError
 
 export function rateLimitAndAuth() {
   return async (c: Context<{ Bindings: Env; Variables: { auth: AuthState } }>, next: Next) => {
-    const anonymousLimit = parseLimit(c.env.RATE_LIMIT_ANONYMOUS_PER_MINUTE, 120);
-    const authenticatedLimit = parseLimit(c.env.RATE_LIMIT_AUTHENTICATED_PER_MINUTE, 1000);
+    const anonymousLimit = parseLimit(c.env.RATE_LIMIT_ANONYMOUS_PER_MINUTE, 120) * 5;
+    const authenticatedLimit = parseLimit(c.env.RATE_LIMIT_AUTHENTICATED_PER_MINUTE, 1000) * 5;
 
     const authHeader = c.req.header("authorization");
     const rawKey = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
