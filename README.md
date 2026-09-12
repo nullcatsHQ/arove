@@ -10,13 +10,14 @@
 
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
-  <img alt="typescript" src="https://img.shields.io/badge/made%20with-TypeScript-3178c6?style=flat-square&logo=typescript">
+  <img alt="typescript" src="https://img.shields.io/badge/made%20with-TypeScript-3178c6?style=flat-square&logo=typescript&logoColor=white">
   <img alt="hono" src="https://img.shields.io/badge/runtime-Hono-e36002?style=flat-square&logo=hono&logoColor=white">
   <img alt="cost" src="https://img.shields.io/badge/cost-%240-success?style=flat-square">
   <img alt="stars" src="https://img.shields.io/github/stars/nullcatsHQ/arove?style=flat-square">
   <img alt="issues" src="https://img.shields.io/github/issues/nullcatsHQ/arove?style=flat-square">
   <img alt="last commit" src="https://img.shields.io/github/last-commit/nullcatsHQ/arove?style=flat-square">
   <img alt="prs" src="https://img.shields.io/badge/PRs-welcome-orange?style=flat-square">
+  <a href="https://discord.gg/sE8zFYUpzz"><img alt="discord" src="https://img.shields.io/badge/Discord-Join%20us-5865F2?style=flat-square&logo=discord&logoColor=white"></a>
 </p>
 
 <p align="center">
@@ -24,7 +25,8 @@
   <a href="#what-you-get">Endpoints</a> •
   <a href="#want-to-self-host-it-instead">Self host</a> •
   <a href="#a-word-on-rate-limits">Rate limits</a> •
-  <a href="#contributing">Contributing</a>
+  <a href="#contributing">Contributing</a> •
+  <a href="https://discord.gg/sE8zFYUpzz">Discord</a>
 </p>
 
 <br>
@@ -100,12 +102,10 @@ curl https://api.arove.workers.dev/v1/repo/vercel/next.js
 
 That's trimmed down for readability, and the numbers are just illustrative rather than something pulled live for this page. The actual response includes full contributor lists, release info, and everything else described below. You don't need to register a repo before asking about it either, an unregistered one just gets fetched fresh on the spot instead of pulled from stored history.
 
-One honest limit worth knowing, `additions`, `deletions`, `filesChanged`, and `branches` only ever show up on the single newest commit. Getting that level of detail costs an extra call per commit, so pulling it for the full list on every single request would get expensive fast, older commits in the list still show everything else, just not that part.
-
 Want updates pushed to you instead of asking again and again? Open that same address as a WebSocket instead of a plain request and you'll get events as they happen.
 
-> [!NOTE]
-> `api.arove.workers.dev` is the real, live, public instance. Not a demo, not a placeholder domain, it's the actual thing running right now and you're welcome to build against it directly.
+> [!TIP]
+> `api.arove.workers.dev` is the real, live, public instance, not a demo or a placeholder domain. Join our [Discord server](https://discord.gg/sE8zFYUpzz) for updates on the project, help with setup, and support from the community and the nullCats™ team.
 
 <br>
 
@@ -248,15 +248,15 @@ src/
 
 ## Developer's Note 
 
-We lethally use $0 building this project, runs on nothing but free tiers, and that includes the public instance you can already query above.
-This is a lesson to people who thinks that they can't build anything good if they don't invest any money. Just remember everything is possible if you have the potential.
-At last this is a fun & wonderful experience for me (trmin) building this awesome project **<3**
+We spent literally $0 building this project. It runs on nothing but free tiers, and that includes the public instance you can already query above.
+This is a lesson for anyone who thinks they can't build something good without spending money. Everything is possible if you're willing to put in the work.
+At the end of the day, this has been a fun and rewarding experience for me (trmin) building this project **<3**
 
 <br>
 
 ## Contributing
 
-Pull requests are genuinely welcome. Open an issue first if you're planning something bigger than a small fix, just so nobody's work crosses paths with anyone else's.
+Pull requests are genuinely welcome. Open an issue first if you're planning something bigger than a small fix, just so nobody's work crosses paths with anyone else's. If you just want to ask a question or talk through an idea before writing any code, the [Discord server](https://discord.gg/sE8zFYUpzz) is a faster way to reach us than an issue.
 
 ## License
 
