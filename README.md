@@ -105,7 +105,7 @@ That's trimmed down for readability, and the numbers are just illustrative rathe
 Want updates pushed to you instead of asking again and again? Open that same address as a WebSocket instead of a plain request and you'll get events as they happen.
 
 > [!TIP]
-> `api.arove.workers.dev` is the real, live, public instance, not a demo or a placeholder domain. Join our [Discord server](https://discord.gg/sE8zFYUpzz) for updates on the project, help with setup, and support from the community and the nullCats™ team.
+> Join our [Discord server](https://discord.gg/sE8zFYUpzz) for updates on the project, help with setup, and support from the community and the nullCats™ team.
 
 <br>
 
